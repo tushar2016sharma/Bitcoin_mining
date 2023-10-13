@@ -1,0 +1,307 @@
+---
+title: "DSP3"
+author: "Kusum Sai Chowdary Sannapaneni"
+date: "2023-10-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Importing Libraries
+
+
+```{r}
+
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(rlang)
+library(gridExtra)
+library(ggthemes)
+library(tidyverse)
+library(reshape2)
+library(corrplot)
+
+```
+
+
+## loading the Dataset
+
+
+```{r}
+
+Cleaned_bitcoin_mining <- read.csv("Cleaned_bitcoin_mining.csv")
+
+head(Cleaned_bitcoin_mining)
+
+
+```
+
+## Checking the dimension and Structure of data 
+
+```{r}
+dim(Cleaned_bitcoin_mining)
+str(Cleaned_bitcoin_mining)
+
+
+```
+#### Our Dataset contains 4,815 observations(rows) and 15 variables(columns). The structure of the bitcoin mining dataset reveals information related to power consumption, efficiency, CO2 emissions, and hash rates.
+
+## Summary Statistics
+```{r}
+
+summary(Cleaned_bitcoin_mining)
+```
+#### From the summary Statistics, we can see the distribution and range of each variable, as well as the presence of missing values.
+
+
+## Data cleaning
+
+## Checking for missing values
+
+```{r}
+
+sum(is.na(Cleaned_bitcoin_mining))
+
+```
+
+#### There are No Null values as this is the Cleaned dataset, Every column has complete data for all the rows.
+
+## Checking number of Unique values
+
+```{r}
+
+sapply(Cleaned_bitcoin_mining, function(x) length(unique(x)))
+
+```
+
+#### Date and time has 4815 unique values which means that each row corresponds to a unique timestamp. Most of the columns have a large number of unique values, suggesting continous data, but few columns like " lower Bound eficiency, J/th", "Upper bound efficiency, J/th", and "Emission intensity, gCO2e/kWh" have fewer values, indicating potential categories or repeated measurements.
+
+
+## Changing of "data and time" datatype
+
+```{r}
+
+Cleaned_bitcoin_mining$'Date.and.Time' <- as.POSIXct(Cleaned_bitcoin_mining$'Date.and.Time',format= "%Y-%m-%dT%H:%M:%S")
+
+ str(Cleaned_bitcoin_mining)
+ 
+ class(Cleaned_bitcoin_mining$Date.and.Time)
+ 
+ date_range <- range(Cleaned_bitcoin_mining$Date.and.Time)
+ 
+ date_range
+ 
+```
+
+#### we are changing the data and time datatype to POSIXct as many plotting functions understand 'POSIXct/ POSIXit and will correctly format axes and labels when ploting datetime values, and is better for data manipulations and operations.
+
+
+## Univariate Analysis
+
+
+```{r}
+
+variables <- c('power.GUESS..GW', 'annualised.consumption.GUESS..TWh', 'Estimated.efficiency..J.Th', 
+               'Hydro.only..MtCO2e', 'Estimated..MtCO2e', 'Coal.only..MtCO2e', 
+               'Emission.intensity..gCO2e.kWh', 'Hash.rate.MH.s')
+
+
+
+# Improve variable names for display
+var_names <- c('Power (GW)', 'Annualised Consumption (TWh)', 'Estimated Efficiency (J/Th)', 
+               'Hydro Only Emissions (MtCO2e)', 'Estimated Emissions (MtCO2e)', 'Coal Only Emissions (MtCO2e)', 
+               'Emission Intensity (gCO2e/kWh)', 'Hash Rate (MH/s)')
+
+# Convert data to long format for facetting
+df_long <- Cleaned_bitcoin_mining %>%
+  select(all_of(variables)) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value")
+
+df_long$Variable <- factor(df_long$Variable, levels = variables, labels = var_names)
+
+# Plot
+p <- ggplot(df_long, aes(x = Value)) + 
+  geom_histogram(aes(y = ..count..), fill = '#66c2a5', color = '#004d40', bins = 30) +
+  geom_freqpoly(color = "#e34a33", size = 1) +
+  facet_wrap(~ Variable, scales = "free", ncol = 2) +
+  theme_minimal() + 
+  labs(title = "Histograms of Selected Variables", y = "Frequency") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(p)
+
+
+for(i in 1:length(variables)) {
+    # Subset data for the variable
+    df_subset <- df_long[df_long$Variable == var_names[i], ]
+    
+    p <- ggplot(df_subset, aes(x = Value)) + 
+      geom_histogram(aes(y = ..count..), fill = '#66c2a5', color = '#004d40', bins = 30) +
+      geom_freqpoly(color = "#e34a33", size = 1) +
+      labs(title = paste("Histogram of", var_names[i]), y = "Frequency") +
+      theme_minimal() + 
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    
+    print(p)
+}
+
+```
+
+
+
+## Outliers
+
+## Boxplots to visualize outliers
+
+
+```{r}
+
+for(i in 1:length(variables)) {
+  p <- ggplot(Cleaned_bitcoin_mining, aes(y = Cleaned_bitcoin_mining[[variables[i]]])) + 
+    geom_boxplot(fill = '#66c2a5', color = '#004d40', outlier.color = "red", outlier.size = 2) +
+    labs(title = paste("Box Plot of", var_names[i]), y = var_names[i]) +
+    theme_minimal() 
+  
+  print(p)
+}
+
+
+
+```
+
+
+
+## IQR 
+
+```{r}
+
+variables <- c('power.GUESS..GW', 'annualised.consumption.GUESS..TWh', 'Estimated.efficiency..J.Th', 
+               'Hydro.only..MtCO2e', 'Estimated..MtCO2e', 'Coal.only..MtCO2e', 
+               'Emission.intensity..gCO2e.kWh', 'Hash.rate.MH.s')
+
+outliers_counts <- sapply(variables, function(var) {
+
+  Q1 <- quantile(Cleaned_bitcoin_mining[[var]], 0.25)
+  Q3 <- quantile(Cleaned_bitcoin_mining[[var]], 0.75)
+  IQR <- Q3 - Q1
+  
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  
+  outliers <- Cleaned_bitcoin_mining[[var]][Cleaned_bitcoin_mining[[var]] < lower_bound | 
+                                           Cleaned_bitcoin_mining[[var]] > upper_bound]
+  
+  length(outliers)
+})
+
+names(outliers_counts) <- variables
+
+outliers_counts
+
+
+
+```
+
+## Cap/Floor Outliers
+
+```{r}
+
+
+Cleaned_bitcoin_mining_copy <- Cleaned_bitcoin_mining
+
+for(var in variables) {
+  
+  Q1 <- quantile(Cleaned_bitcoin_mining_copy[[var]], 0.25)
+  Q3 <- quantile(Cleaned_bitcoin_mining_copy[[var]], 0.75)
+  IQR <- Q3 - Q1
+  
+
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  
+  Cleaned_bitcoin_mining_copy[[var]] <- ifelse(Cleaned_bitcoin_mining_copy[[var]] < lower_bound, lower_bound, 
+                                               ifelse(Cleaned_bitcoin_mining_copy[[var]] > upper_bound, upper_bound, 
+                                                      Cleaned_bitcoin_mining_copy[[var]]))
+}
+
+summary(Cleaned_bitcoin_mining_copy[variables])
+
+for (var in variables) {
+  
+  p <- ggplot(Cleaned_bitcoin_mining_copy, aes_string(x = var)) + 
+    geom_histogram(aes(y = ..count..),fill = '#66c2a5', color = '#004d40', bins = 30) +
+    geom_freqpoly(color = "#e34a33", size = 1) +
+    labs(title = paste("Histogram of", var, "after Capping/Flooring"), y = "Frequency") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  print(p)
+}
+
+
+```
+
+# Apply log transformation
+
+```{r}
+
+Cleaned_bitcoin_mining_log <- Cleaned_bitcoin_mining
+for (var in variables) {
+  Cleaned_bitcoin_mining_log[[paste0("log_", var)]] <- log1p(Cleaned_bitcoin_mining[[var]])
+}
+
+# Visualize the log-transformed data
+for (var in paste0("log_", variables)) {
+  # Plot
+  p <- ggplot(Cleaned_bitcoin_mining_log, aes_string(x = var)) + 
+    geom_histogram(aes(y = ..count..), fill = '#66c2a5', color = '#004d40', bins = 30) +
+    geom_freqpoly(color = "#e34a33", size = 1) +
+    labs(title = paste("Histogram of Log Transformed", var), y = "Frequency") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  print(p)
+}
+
+
+```
+
+
+## Segmaentation Analysis
+
+#### It's a method used to divide a data set into subsets (with outliers(original data) & without outliers)
+
+
+
+
+```{r}
+
+data_without_outliers <- Cleaned_bitcoin_mining
+
+for (var in variables) {
+  
+  Q1 <- quantile(Cleaned_bitcoin_mining[[var]], 0.25)
+  Q3 <- quantile(Cleaned_bitcoin_mining[[var]], 0.75)
+  IQR <- Q3 - Q1
+  
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  
+  data_without_outliers <- data_without_outliers[data_without_outliers[[var]] >= lower_bound & data_without_outliers[[var]] <= upper_bound, ]
+}
+
+data_with_outliers <- Cleaned_bitcoin_mining
+
+summary_without_outliers <- summary(data_without_outliers[variables])
+summary_with_outliers <- summary(data_with_outliers[variables])
+
+list(Without_Outliers = summary_without_outliers, With_Outliers = summary_with_outliers)
+
+
+
+```
+
