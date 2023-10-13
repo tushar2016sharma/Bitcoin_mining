@@ -211,4 +211,5 @@ ggplot(bitcoin_mining_cleanedData, aes(y = Hash.rate.MH.s)) +
   theme_minimal()
 
 
+```
 
