@@ -305,3 +305,75 @@ list(Without_Outliers = summary_without_outliers, With_Outliers = summary_with_o
 
 ```
 
+## Bi variate Analysis
+
+## Corelation Matrix
+
+```{r}
+
+
+cor_matrix <- cor(Cleaned_bitcoin_mining[variables], use = "complete.obs")
+
+
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+
+corrplot(cor_matrix, method = "color", type = "upper", 
+         col = col(200),     
+         tl.col = "black",  
+         tl.srt = 90,         
+         order = "hclust",    
+         addCoef.col = "black", 
+         number.cex = 0.5,  
+         title = "Correlation Matrix", mar=c(0,0,1,0))
+
+
+```
+
+#### Highly Correlated Variables : 
+
+
+
+## Sample T-test to compare the Power.Guess..GW before and after jan 1st 2013
+
+```{r}
+
+
+before_2013 <- subset(Cleaned_bitcoin_mining, Date.and.Time < as.Date("2013-01-03"))
+after_2013 <- subset(Cleaned_bitcoin_mining, Date.and.Time >= as.Date("2013-01-03"))
+
+t_result <- t.test(before_2013$power.GUESS..GW, after_2013$power.GUESS..GW)
+
+print(t_result)
+
+
+```
+
+
+## T-test for Selected Variables
+
+```{r}
+
+results <- list()
+
+for(var in variables) {
+
+    if(any(is.na(before_2013[[var]])) || any(is.na(after_2013[[var]]))) {
+        results[[var]] <- "Contains NA values"
+    } else if(length(unique(before_2013[[var]])) == 1 || length(unique(after_2013[[var]])) == 1) {
+
+        results[[var]] <- "Constant values in one or both periods"
+    } else {
+        result <- t.test(before_2013[[var]], after_2013[[var]])
+        results[[var]] <- result
+    }
+}
+
+for(var in variables) {
+    cat("T-test results for", var, ":\n")
+    print(results[[var]])
+    cat("\n---------------------------------------------\n")
+}
+
+
+
+```
