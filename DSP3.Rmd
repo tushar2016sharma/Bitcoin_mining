@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Importing Libraries
+## Importing Libraries used for this analysis
 
 
 ```{r}
@@ -54,7 +54,7 @@ str(Cleaned_bitcoin_mining)
 
 summary(Cleaned_bitcoin_mining)
 ```
-#### From the summary Statistics, we can see the distribution and range of each variable, as well as the presence of missing values.
+#### From the summary Statistics, we can sense the distribution, central tendency and range of each variable, as well as the presence of missing values.
 
 
 ## Data cleaning
@@ -67,7 +67,7 @@ sum(is.na(Cleaned_bitcoin_mining))
 
 ```
 
-#### There are No Null values as this is the Cleaned dataset, Every column has complete data for all the rows.
+#### There are No missing values as this is the Cleaned dataset and Every column has complete data for all the rows.
 
 ## Checking number of Unique values
 
@@ -80,7 +80,7 @@ sapply(Cleaned_bitcoin_mining, function(x) length(unique(x)))
 #### Date and time has 4815 unique values which means that each row corresponds to a unique timestamp. Most of the columns have a large number of unique values, suggesting continous data, but few columns like " lower Bound eficiency, J/th", "Upper bound efficiency, J/th", and "Emission intensity, gCO2e/kWh" have fewer values, indicating potential categories or repeated measurements.
 
 
-## Changing of "data and time" datatype
+## Changing of "data and time" datatype to datetime format
 
 ```{r}
 
@@ -96,21 +96,23 @@ Cleaned_bitcoin_mining$'Date.and.Time' <- as.POSIXct(Cleaned_bitcoin_mining$'Dat
  
 ```
 
-#### we are changing the data and time datatype to POSIXct as many plotting functions understand 'POSIXct/ POSIXit and will correctly format axes and labels when ploting datetime values, and is better for data manipulations and operations.
+#### we are changing the data and time's datatype to POSIXct as many plotting functions understand 'POSIXct/ POSIXit and will correctly format axes and labels when ploting datetime values, and is better for data manipulations and operations.
 
 
-## Univariate Analysis
+## Univariate Analysis - Analyzing one variable at a time
 
+## Histograms- Histograms will give insights into the distribution of continuous variables and helps us to understand the central the central tendency, spread, and shape of the dataset's distribution
 
 ```{r}
 
+# there are the selected variables for analysis
 variables <- c('power.GUESS..GW', 'annualised.consumption.GUESS..TWh', 'Estimated.efficiency..J.Th', 
                'Hydro.only..MtCO2e', 'Estimated..MtCO2e', 'Coal.only..MtCO2e', 
                'Emission.intensity..gCO2e.kWh', 'Hash.rate.MH.s')
 
 
 
-# Improve variable names for display
+# Improving the variable names for display in the plots
 var_names <- c('Power (GW)', 'Annualised Consumption (TWh)', 'Estimated Efficiency (J/Th)', 
                'Hydro Only Emissions (MtCO2e)', 'Estimated Emissions (MtCO2e)', 'Coal Only Emissions (MtCO2e)', 
                'Emission Intensity (gCO2e/kWh)', 'Hash Rate (MH/s)')
@@ -122,7 +124,7 @@ df_long <- Cleaned_bitcoin_mining %>%
 
 df_long$Variable <- factor(df_long$Variable, levels = variables, labels = var_names)
 
-# Plot
+# All histogram in one view
 p <- ggplot(df_long, aes(x = Value)) + 
   geom_histogram(aes(y = ..count..), fill = '#66c2a5', color = '#004d40', bins = 30) +
   geom_freqpoly(color = "#e34a33", size = 1) +
@@ -134,8 +136,8 @@ p <- ggplot(df_long, aes(x = Value)) +
 print(p)
 
 
+# printing each histogram for better view
 for(i in 1:length(variables)) {
-    # Subset data for the variable
     df_subset <- df_long[df_long$Variable == var_names[i], ]
     
     p <- ggplot(df_subset, aes(x = Value)) + 
@@ -151,11 +153,13 @@ for(i in 1:length(variables)) {
 
 ```
 
+####
+
 
 
 ## Outliers
 
-## Boxplots to visualize outliers
+## Boxplots- Boxplots are useful to visualize outliers and helpful to understand the spread and skewness of the data and they also show the median, quartiles, and potential outliers for each variable.
 
 
 ```{r}
@@ -183,6 +187,9 @@ variables <- c('power.GUESS..GW', 'annualised.consumption.GUESS..TWh', 'Estimate
                'Hydro.only..MtCO2e', 'Estimated..MtCO2e', 'Coal.only..MtCO2e', 
                'Emission.intensity..gCO2e.kWh', 'Hash.rate.MH.s')
 
+
+# sapply function is used to apply a finction to each variable in the 'variables'
+
 outliers_counts <- sapply(variables, function(var) {
 
   Q1 <- quantile(Cleaned_bitcoin_mining[[var]], 0.25)
@@ -206,7 +213,14 @@ outliers_counts
 
 ```
 
-## Cap/Floor Outliers
+#### Bitcoin's popularity, mining difficulty, and technology have evolved over time. Extreme values in recent years might reflect genuine shifts in the ecosystem and whereas early outliers might indicate data sparsity or other anomalies.
+
+
+## Cap/Floor Outliers- Instead of removing the outliers, we can cap them. 
+
+#### If we feel like the extreme values are genuine or not errors which influences the analysis, we acn consider capping them at a threshold like the lower and upper bound determined by the IQR method as this retains the data but reduces the skewness.
+
+#### For example, any value below the lower bound can be set to the lower bound value and similar for the upper bound and this approach retains the outliers.
 
 ```{r}
 
@@ -245,7 +259,26 @@ for (var in variables) {
 
 ```
 
-# Apply log transformation
+
+#### After capping and flooring, the extreme values in the data were limited to a more standadized range. The capped/floored data likely still retains its right- skewed nature for many variables. 
+
+
+#### The spread of data might appear more compact now without the long tails that were previously present due to outliers.
+
+
+
+
+
+# Apply log transformation - Log transformation is a dta transformation method in which it replaces each variable x with a log(x).
+
+
+#### If the data is heavly skewed, by applying the log transformation we can make the data more interpretable and it is especially useful when there are extreme values or outliers.
+
+#### For right- skewed data, if we use log transformation, we can compress the long tail and make the distribution more symmetrical.
+
+#### It has the effect of compressing the higher values more than the lower values, which can be particularly useful for right skewed data.
+
+##### After the log-transformation, we expect the peaks of these polygons to shift towards the center, indicating a more normalised distribution. Outliers will be closer to the main data cluster, making them less extreme
 
 ```{r}
 
@@ -271,11 +304,15 @@ for (var in paste0("log_", variables)) {
 ```
 
 
-## Segmaentation Analysis
+#### log1p function is used for tthe transformation because it computes the natural algorithm of 1 + x. It is useful for cases for cases where values might be zero as it ensures the transformed value remains defined.
 
-#### It's a method used to divide a data set into subsets (with outliers(original data) & without outliers)
+#### It can help stabilize the variance making the data more normal- distribution and reduce the influence of outliers, especially for right skewed data.
 
 
+
+## Segmaentation Analysis- It's a method used to divide a data set into subsets (with outliers(original data) & without outliers)
+
+#### Instead of removing the outliers, we can perform segemented analysis, one with the entire dataset and one without outliers.
 
 
 ```{r}
@@ -305,7 +342,7 @@ list(Without_Outliers = summary_without_outliers, With_Outliers = summary_with_o
 
 ```
 
-## Bi variate Analysis
+## Bi-variate Analysis- Analzing the relationship between two or more variables.
 
 ## Corelation Matrix
 
@@ -334,6 +371,11 @@ corrplot(cor_matrix, method = "color", type = "upper",
 
 
 ## Sample T-test to compare the Power.Guess..GW before and after jan 1st 2013
+
+
+#### The T-test is used to deterrmine if there is a statististically significant difference between the means of two groups. 
+
+
 
 ```{r}
 
