@@ -176,7 +176,7 @@ variables <- c('power.GUESS..GW', 'annualised.consumption.GUESS..TWh', 'Estimate
                'Emission.intensity..gCO2e.kWh', 'Hash.rate.MH.s')
 
 
-# sapply function is used to apply a finction to each variable in the 'variables'
+# sapply function is used to apply a function to each variable in the 'variables'
 
 outliers_counts <- sapply(variables, function(var) {
 
@@ -363,7 +363,6 @@ summary_with_outliers <- summary(data_with_outliers[variables])
 list(Without_Outliers = summary_without_outliers, With_Outliers = summary_with_outliers)
 
 
-
 ```
 
 ## Bi-variate Analysis- Analzing the relationship between two or more variables.
@@ -398,7 +397,6 @@ corrplot(cor_matrix, method = "color", type = "upper",
 
 
 #### The T-test is used to deterrmine if there is a statististically significant difference between the means of two groups. 
-
 
 
 ```{r}
@@ -439,7 +437,5 @@ for(var in variables) {
     print(results[[var]])
     cat("\n---------------------------------------------\n")
 }
-
-
 
 ```
