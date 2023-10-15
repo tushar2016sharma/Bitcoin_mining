@@ -105,26 +105,21 @@ Cleaned_bitcoin_mining$'Date.and.Time' <- as.POSIXct(Cleaned_bitcoin_mining$'Dat
 
 ```{r}
 
-# there are the selected variables for analysis
 variables <- c('power.GUESS..GW', 'annualised.consumption.GUESS..TWh', 'Estimated.efficiency..J.Th', 
                'Hydro.only..MtCO2e', 'Estimated..MtCO2e', 'Coal.only..MtCO2e', 
                'Emission.intensity..gCO2e.kWh', 'Hash.rate.MH.s')
 
 
-
-# Improving the variable names for display in the plots
 var_names <- c('Power (GW)', 'Annualised Consumption (TWh)', 'Estimated Efficiency (J/Th)', 
                'Hydro Only Emissions (MtCO2e)', 'Estimated Emissions (MtCO2e)', 'Coal Only Emissions (MtCO2e)', 
                'Emission Intensity (gCO2e/kWh)', 'Hash Rate (MH/s)')
 
-# Convert data to long format for facetting
 df_long <- Cleaned_bitcoin_mining %>%
   select(all_of(variables)) %>%
   pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value")
 
 df_long$Variable <- factor(df_long$Variable, levels = variables, labels = var_names)
 
-# All histogram in one view
 p <- ggplot(df_long, aes(x = Value)) + 
   geom_histogram(aes(y = ..count..), fill = '#66c2a5', color = '#004d40', bins = 30) +
   geom_freqpoly(color = "#e34a33", size = 1) +
@@ -136,7 +131,6 @@ p <- ggplot(df_long, aes(x = Value)) +
 print(p)
 
 
-# printing each histogram for better view
 for(i in 1:length(variables)) {
     df_subset <- df_long[df_long$Variable == var_names[i], ]
     
@@ -147,14 +141,10 @@ for(i in 1:length(variables)) {
       theme_minimal() + 
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
     
-    
     print(p)
 }
 
 ```
-
-####
-
 
 
 ## Outliers
@@ -174,9 +164,7 @@ for(i in 1:length(variables)) {
 }
 
 
-
 ```
-
 
 
 ## IQR 
@@ -222,8 +210,8 @@ outliers_counts
 
 #### For example, any value below the lower bound can be set to the lower bound value and similar for the upper bound and this approach retains the outliers.
 
-```{r}
 
+```{r}
 
 Cleaned_bitcoin_mining_copy <- Cleaned_bitcoin_mining
 
@@ -244,20 +232,38 @@ for(var in variables) {
 
 summary(Cleaned_bitcoin_mining_copy[variables])
 
-for (var in variables) {
-  
-  p <- ggplot(Cleaned_bitcoin_mining_copy, aes_string(x = var)) + 
-    geom_histogram(aes(y = ..count..),fill = '#66c2a5', color = '#004d40', bins = 30) +
-    geom_freqpoly(color = "#e34a33", size = 1) +
-    labs(title = paste("Histogram of", var, "after Capping/Flooring"), y = "Frequency") +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
-  
-  print(p)
+
+df_long_capped <- Cleaned_bitcoin_mining_copy %>%
+  select(all_of(variables)) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value")
+
+df_long_capped$Variable <- factor(df_long_capped$Variable, levels = variables, labels = var_names)
+
+p_capped <- ggplot(df_long_capped, aes(x = Value)) + 
+  geom_histogram(aes(y = ..count..), fill = '#66c2a5', color = '#004d40', bins = 30) +
+  geom_freqpoly(color = "#e34a33", size = 1) +
+  facet_wrap(~ Variable, scales = "free", ncol = 2) +
+  theme_minimal() + 
+  labs(title = "Histograms of Capped Variables", y = "Frequency") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(p_capped)
+
+for(i in 1:length(variables)) {
+    df_subset <- df_long_capped[df_long_capped$Variable == var_names[i], ]
+    
+    p <- ggplot(df_subset, aes(x = Value)) + 
+      geom_histogram(aes(y = ..count..), fill = '#66c2a5', color = '#004d40', bins = 30) +
+      geom_freqpoly(color = "#e34a33", size = 1) +
+      labs(title = paste("Capped Histogram of", var_names[i]), y = "Frequency") +
+      theme_minimal() + 
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    print(p)
 }
-
-
 ```
+
+
 
 
 #### After capping and flooring, the extreme values in the data were limited to a more standadized range. The capped/floored data likely still retains its right- skewed nature for many variables. 
@@ -267,9 +273,7 @@ for (var in variables) {
 
 
 
-
-
-# Apply log transformation - Log transformation is a dta transformation method in which it replaces each variable x with a log(x).
+## Apply log transformation - Log transformation is a dta transformation method in which it replaces each variable x with a log(x).
 
 
 #### If the data is heavly skewed, by applying the log transformation we can make the data more interpretable and it is especially useful when there are extreme values or outliers.
@@ -280,6 +284,8 @@ for (var in variables) {
 
 ##### After the log-transformation, we expect the peaks of these polygons to shift towards the center, indicating a more normalised distribution. Outliers will be closer to the main data cluster, making them less extreme
 
+
+
 ```{r}
 
 Cleaned_bitcoin_mining_log <- Cleaned_bitcoin_mining
@@ -287,17 +293,35 @@ for (var in variables) {
   Cleaned_bitcoin_mining_log[[paste0("log_", var)]] <- log1p(Cleaned_bitcoin_mining[[var]])
 }
 
-# Visualize the log-transformed data
-for (var in paste0("log_", variables)) {
-  # Plot
-  p <- ggplot(Cleaned_bitcoin_mining_log, aes_string(x = var)) + 
-    geom_histogram(aes(y = ..count..), fill = '#66c2a5', color = '#004d40', bins = 30) +
-    geom_freqpoly(color = "#e34a33", size = 1) +
-    labs(title = paste("Histogram of Log Transformed", var), y = "Frequency") +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
-  
-  print(p)
+log_variables <- paste0("log_", variables)
+df_long_log <- Cleaned_bitcoin_mining_log %>%
+  select(all_of(log_variables)) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value")
+
+log_var_names <- paste0("Log(", var_names, ")")
+df_long_log$Variable <- factor(df_long_log$Variable, levels = log_variables, labels = log_var_names)
+
+p_log <- ggplot(df_long_log, aes(x = Value)) + 
+  geom_histogram(aes(y = ..count..), fill = '#66c2a5', color = '#004d40', bins = 30) +
+  geom_freqpoly(color = "#e34a33", size = 1) +
+  facet_wrap(~ Variable, scales = "free", ncol = 2) +
+  theme_minimal() + 
+  labs(title = "Histograms of Log-transformed Variables", y = "Frequency") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(p_log)
+
+for(i in 1:length(log_variables)) {
+    df_subset <- df_long_log[df_long_log$Variable == log_var_names[i], ]
+    
+    p <- ggplot(df_subset, aes(x = Value)) + 
+      geom_histogram(aes(y = ..count..), fill = '#66c2a5', color = '#004d40', bins = 30) +
+      geom_freqpoly(color = "#e34a33", size = 1) +
+      labs(title = paste("Log-transformed Histogram of", log_var_names[i]), y = "Frequency") +
+      theme_minimal() + 
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    print(p)
 }
 
 
@@ -310,7 +334,7 @@ for (var in paste0("log_", variables)) {
 
 
 
-## Segmaentation Analysis- It's a method used to divide a data set into subsets (with outliers(original data) & without outliers)
+## Segmentation Analysis- It's a method used to divide a data set into subsets (with outliers(original data) & without outliers)
 
 #### Instead of removing the outliers, we can perform segemented analysis, one with the entire dataset and one without outliers.
 
