@@ -1,0 +1,802 @@
+---
+title: "An Exploratory Data Analysis of Environmental Impacts of Bitcoin Mining"
+author: "Tushar, Kusum, Brian"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+# Abstract
+This abstract summarizes an exploratory data analysis (EDA) project that examines environmental impacts of Bitcoin Mining using dataset which contains 15 fields and a total of 4815 records. This data analysis examines the variations in electricity consumption and CO2 emissions on a per day basis resulting from Bitcoin mining. This analysis investigates the impact of various variables on the CO2 emissions intensity associated with Bitcoin and also explores how Bitcoin mining activity (Bitcoin network hashrate) varies by region. To assess the relationship between Bitcoin and its environmental impact, the dataset is utilized to conduct a series of analyses in the following order: Time series plot, distribution of variables, outlier detection, variable relationships, and spatial analysis. Overall, this analysis provides insights into how Bitcoin mining has affected the environment and can be helpful for shaping future policies to mitigate environmental pollution caused by Bitcoin mining.
+
+# Introduction
+Bitcoin mining requires miners to solve mathematical puzzles known as the proof of work. The reason Bitcoin mining consumes a significant amount of electricity is primarily due to the energy-intensive nature of the Proof of Work (PoW) consensus algorithm it uses.The competitive mining drives miners to use increasingly powerful and energy-hungry hardware to gain a competitive edge. The ASICs are highly efficient at solving the PoW puzzles but are power-hungry machines that consume substantial electricity.
+
+### Bitcoin Mining Process
+
+* Bitcoin mining involves use of specialized hardware, such as ASICs or GPUs to perform the Proof of Work calculations.
+* These devices are energy-intensive and are designed to perform hash computations quickly. 
+* In this research, the aim is to comprehensively analyze the relationship between Bitcoin mining and its environmental consequences through exploratory data and statistical analysis. 
+
+### SMART Questions
+
+1. What are the impacts of different variables on the CO2 emission intensity?
+2. How does the Bitcoin mining activity (network hash rate) vary with regional variations?
+
+### Methodology
+
+1. Time series and stationarity analysis
+2. Distribution of variables 
+3. Outlier detection 
+4. Variable relationships 
+5. Spatial analysis 
+
+# 1. Data 
+
+The raw data contains 15 fields and a total of 4815 records from July 18, 2010 to Sep 22, 2023. Separate geolocational data consisting of country-wise monthly hash rate from Sep 2019 to Jan 2019. Among the 15 variables, some are generally reported with an uncertainty i.e. the lower and upper bounds and a best estimate (guess). From the total 15 columns, 7 columns were removed and only the best estimate values for such variables have been retained. The target variable of interest is the emission intensity of CO2.
+
+* Emission intensity :  Emission intensity measures the amount of greenhouse gas emissions (e.g., CO2) produced per unit of energy generated. It's often used to compare the environmental impact of different energy sources or activities.
+* Hashrate :  The Bitcoin hashrate is a measure of the computational power and processing capacity of the Bitcoin network.     It represents the total number of hash operations (cryptographic calculations) that the network can perform per second.
+* Annualized consumption guess: This likely refers to an estimate of the annual energy consumption for a specific device, system, or operation. It's an approximation of how much electricity will be used over a year.
+
+## Importing Libraries used for this analysis
+
+
+```{r}
+
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(rlang)
+library(gridExtra)
+library(ggthemes)
+library(tidyverse)
+library(reshape2)
+library(corrplot)
+
+```
+
+
+```{r}
+# Load the CSV data
+bitcoin_mining <- read.csv("bitcoin_mining.csv")
+
+# Create a DataFrame from the loaded data
+bitcoin_mining <- data.frame(bitcoin_mining)
+print(colnames(bitcoin_mining))
+
+# Select specific columns and removed 
+data <- subset(
+  bitcoin_mining, select = c(
+  "Date.and.Time", "power.GUESS..GW", "annualised.consumption.GUESS..TWh",   "Estimated.efficiency..J.Th", "Hydro.only..MtCO2e", "Estimated..MtCO2e",  "Coal.only..MtCO2e", "Emission.intensity..gCO2e.kWh", "Hash.rate.MH.s"
+  )
+)
+
+# View the selected columns
+head(data)
+```
+
+## Imports
+
+```{r}
+library(devtools)
+library(ggplot2)
+library(gridExtra)
+library(scales)
+library(dplyr)
+library(zoo)
+library(corrplot)
+library(GGally)
+
+```
+
+
+## Checking the Structure of data
+
+```{r}
+str(data)
+
+```
+## Summary statistics
+
+```{r}
+
+summary(data)
+```
+
+## Subplots of all the 8 vairables 
+
+#### Uncomment the line with ggsave() function to export a jpg picture of the subplots generated. Note that the layout of the plots displayed in .html knitted file and the exported image can be different!
+
+```{r}
+library(ggplot2)
+library(gridExtra) # for grid.arrange
+
+time_series_list <- list()
+
+# Convert Date.and.Time to a Date object
+bitcoin_mining$Date.and.Time <- as.Date(bitcoin_mining$Date.and.Time)
+
+columns_to_plot <- c("power.GUESS..GW", "annualised.consumption.GUESS..TWh", "Estimated.efficiency..J.Th", "Hydro.only..MtCO2e", "Estimated..MtCO2e", "Coal.only..MtCO2e", "Emission.intensity..gCO2e.kWh", "Hash.rate.MH.s")
+
+cols <- c("Power guess (GW)", "Annualised consumption guess (TWh)", "Estimated efficiency J/Th", "Hydro-only MtCO2eq", "Estimated MtCO2eq", "Coal-only MtCO2eq", "Emission intensity gCO2eq/kWh", "Hash rate (MH/s)")
+
+plot_width <- 14
+plot_height <- 7
+
+# Define a custom function to calculate appropriate date breaks
+calculate_date_breaks <- function(data) {
+  date_range <- max(data$Date.and.Time, na.rm = TRUE) - min(data$Date.and.Time, na.rm = TRUE)
+  if (as.numeric(date_range) > 2 * 365) {
+    return(date_breaks("2 years"))
+  } else {
+    return(date_breaks("1 year"))
+  }
+}
+
+for (i in 1:length(columns_to_plot)) {
+  col <- columns_to_plot[i]
+  col_name <- cols[i]
+
+  breaks <- calculate_date_breaks(bitcoin_mining)
+
+  p <- ggplot(bitcoin_mining, aes(x = Date.and.Time, y = .data[[col]])) +
+    geom_line(color = "blue", alpha = 0.8) +
+    labs(x = if (i > 4) "Date" else "", y = col_name) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+          axis.text.y = element_text(size = 10),
+          axis.title.x = element_text(size = 10),
+          axis.title.y = element_text(size = 10)) +
+    scale_x_date(breaks = breaks, date_labels = "%Y", expand = c(0, 0))
+
+  time_series_list[[col]] <- p
+}
+
+# Arrange the plots using grid.arrange
+grid.arrange(grobs = time_series_list, ncol = 4, widths = rep(plot_width, 4), heights = rep(plot_height, 2))
+
+## 
+## Boxplots  
+
+```{r}
+boxplot_list <- list()
+
+for (i in 1:length(columns_to_plot)) {
+    col <- columns_to_plot[i]
+    col_name <- cols[i]
+    
+   p <- ggplot(data, aes(x = factor(1), y = .data[[col]])) +
+        geom_boxplot(fill = "lightblue", color = "black", width = 0.5) +
+        geom_segment(aes(y = median(.data[[col]]), yend = median(.data[[col]]),
+                         x = 0.75, xend = 1.25), size = 0.7, color = 'red') +
+        geom_segment(aes(y = min(.data[[col]]), yend = min(.data[[col]]),
+                          x = 0.7, xend = 1.3), size = 0.7, color = 'black') +
+         geom_segment(aes(y = max(.data[[col]]), yend = max(.data[[col]]),
+                          x = 0.7, xend = 1.3), size = 0.7, color = 'black') +
+        labs(x = "", y = col_name) +
+        scale_fill_manual(values = c("lightblue")) + 
+        theme_minimal() +
+        theme(axis.text.x = element_blank(),
+              axis.text.y = element_text(size = 8.5),
+              axis.title.x = element_blank(),
+              axis.title.y = element_text(size = 8.5, margin=margin(0,6,0,0)),
+              plot.margin = margin(0,15,0,0)) +
+        ylim(0, max(data[[col]], na.rm = TRUE) * 1.2)  
+    
+    boxplot_list[[col]] <- p
+}
+grid.arrange(grobs = boxplot_list, ncol = 4, width = 14, height = 10)
+```
+
+## Correlation plots
+
+```{r}
+rename <- c("Power guess", "Ann. consumption guess", "Est. efficiency", "Hydro-only MtCO2eq", "Estimated MtCO2eq",  "Coal-only MtCO2eq", "Emission intensity", "Hash rate")
+
+selected_data <- bitcoin_mining[columns_to_plot]
+selected_data <- na.omit(selected_data)
+selected_data <- sapply(selected_data, as.numeric)
+selected_data <- as.data.frame(selected_data)
+
+scatter_plot_list <- list()
+unique_pairs <- combn(ncol(selected_data), 2)
+num_pairs <- ncol(unique_pairs)
+
+for (i in 1 : num_pairs) {
+    x_var <- unique_pairs[1, i]
+    y_var <- unique_pairs[2, i]
+    
+    scatter_plot <- ggally_points(
+        data = selected_data,  
+        mapping = aes_string(
+            x = colnames(selected_data)[x_var],
+            y = colnames(selected_data)[y_var]),
+        color = "blue", size = 1, pch = 21) +
+        geom_point(color = "blue", size = 1) +
+        labs(x = rename[x_var], y = rename[y_var]) +
+        
+        theme(axis.text.x = element_text(size = 10), 
+              axis.text.y = element_text(size = 10),
+              axis.title.x = element_text(size = 10), 
+              axis.title.y = element_text(size = 10))
+    
+    scatter_plot_list[[i]] <- scatter_plot
+}
+
+grid.arrange(grobs = scatter_plot_list, ncol = 4, width = 6 * 4, heights = rep(3, ceiling(num_pairs / 4)))
+```
+
+
+## Stationarity analysis of time series
+  
+```{r}
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+
+start_date <- as.Date("2010-07-18")
+end_date <- as.Date("2023-09-22")
+
+data_frame <- data.frame(Date = seq.Date(start_date, end_date, by = "weeks"))
+
+interval_weeks <- 104  # 2 years (approx 104 weeks)
+plot_list <- list()
+
+rename <- c("Power guess", "Ann. consumption guess", "Est. efficiency", "Hydro-only MtCO2eq", "Estimated MtCO2eq", "Coal-only MtCO2eq", "Emission intensity", "Hash rate")
+
+for (col_name in columns_to_plot) {
+  ts_data <- ts(bitcoin_mining[[col_name]], frequency = 365)
+
+  rolling_data <- data.frame(Date = as.Date(character(0)), RollingMean = numeric(0), RollingSD = numeric(0))
+
+  for (i in seq.Date(start_date, end_date, by = paste(interval_weeks, "days"))) {
+    interval_start <- i
+    interval_end <- i + 2 * 365  # 2 years in days
+
+    subset_data <- data_frame %>%
+      filter(Date >= interval_start, Date < interval_end)
+
+    mean_value <- mean(ts_data[subset_data$Date - start_date + 1])
+    sd_value <- sd(ts_data[subset_data$Date - start_date + 1])
+
+    rolling_data <- rbind(rolling_data, data.frame(Date = interval_start + 365, RollingMean = mean_value, RollingSD = sd_value))
+  }
+
+  rolling_data$Date <- as.Date(rolling_data$Date)
+
+  plot_data <- rolling_data %>%
+    filter(!is.na(RollingMean) & !is.na(RollingSD))
+
+  plot <- ggplot(plot_data, aes(x = Date)) +
+    geom_point(aes(y = RollingMean), color = "blue", size = .5) +
+    geom_line(aes(y = RollingMean), color = "blue", size = .5) +
+    geom_point(aes(y = RollingSD), color = "red", size = .5) +
+    geom_line(aes(y = RollingSD), color = "red", size = .5) +
+    labs(x = "Date", y = paste("Rolling Mean/SD of", rename[which(columns_to_plot == col_name)])) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 7),  
+          axis.text.y = element_text(size = 7),  
+          axis.title.x = element_text(size = 7),  
+          axis.title.y = element_text(size = 7)) +
+    scale_x_date(date_labels = "%Y", date_breaks = "2 years")
+
+  plot_list[[col_name]] <- plot
+}
+
+# Arrange the plots using grid.arrange
+grid.arrange(grobs = plot_list, ncol = 4, widths = rep(14, 4), heights = rep(7, ceiling(length(columns_to_plot) / 4)))
+
+```
+
+
+
+## loading the Dataset
+
+
+```{r}
+
+Cleaned_bitcoin_mining <- read.csv("Cleaned_bitcoin_mining.csv")
+
+head(Cleaned_bitcoin_mining)
+
+
+```
+
+## Checking the dimension and Structure of data 
+
+```{r}
+dim(Cleaned_bitcoin_mining)
+str(Cleaned_bitcoin_mining)
+
+
+```
+#### Our Dataset contains 4,815 observations(rows) and 15 variables(columns). The structure of the bitcoin mining dataset reveals information related to power consumption, efficiency, CO2 emissions, and hash rates.
+
+## Summary Statistics
+```{r}
+
+summary(Cleaned_bitcoin_mining)
+```
+#### From the summary Statistics, we can sense the distribution, central tendency and range of each variable, as well as the presence of missing values.
+
+
+## Data cleaning
+
+## Checking for missing values
+
+```{r}
+
+sum(is.na(Cleaned_bitcoin_mining))
+
+```
+
+#### There are No missing values as this is the Cleaned dataset and Every column has complete data for all the rows.
+
+## Checking number of Unique values
+
+```{r}
+
+sapply(Cleaned_bitcoin_mining, function(x) length(unique(x)))
+
+```
+
+#### Date and time has 4815 unique values which means that each row corresponds to a unique timestamp. Most of the columns have a large number of unique values, suggesting continous data, but few columns like " lower Bound eficiency, J/th", "Upper bound efficiency, J/th", and "Emission intensity, gCO2e/kWh" have fewer values, indicating potential categories or repeated measurements.
+
+
+## Changing of "data and time" datatype to datetime format
+
+```{r}
+
+Cleaned_bitcoin_mining$'Date.and.Time' <- as.POSIXct(Cleaned_bitcoin_mining$'Date.and.Time',format= "%Y-%m-%dT%H:%M:%S")
+
+ str(Cleaned_bitcoin_mining)
+ 
+ class(Cleaned_bitcoin_mining$Date.and.Time)
+ 
+ date_range <- range(Cleaned_bitcoin_mining$Date.and.Time)
+ 
+ date_range
+ 
+```
+
+#### we are changing the data and time's datatype to POSIXct as many plotting functions understand 'POSIXct/ POSIXit and will correctly format axes and labels when ploting datetime values, and is better for data manipulations and operations.
+
+
+### Univariate Analysis - Analyzing one variable at a time
+
+## Histograms
+#### Histograms will give insights into the distribution of continuous variables and helps us to understand the central the central tendency, spread, and shape of the dataset's distribution
+
+```{r}
+
+variables <- c('power.GUESS..GW', 'annualised.consumption.GUESS..TWh', 'Estimated.efficiency..J.Th', 
+               'Hydro.only..MtCO2e', 'Estimated..MtCO2e', 'Coal.only..MtCO2e', 
+               'Emission.intensity..gCO2e.kWh', 'Hash.rate.MH.s')
+
+
+var_names <- c('Power (GW)', 'Annualised Consumption (TWh)', 'Estimated Efficiency (J/Th)', 
+               'Hydro Only Emissions (MtCO2e)', 'Estimated Emissions (MtCO2e)', 'Coal Only Emissions (MtCO2e)', 
+               'Emission Intensity (gCO2e/kWh)', 'Hash Rate (MH/s)')
+
+df_long <- Cleaned_bitcoin_mining %>%
+  select(all_of(variables)) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value")
+
+df_long$Variable <- factor(df_long$Variable, levels = variables, labels = var_names)
+
+p <- ggplot(df_long, aes(x = Value)) + 
+  geom_histogram(aes(y = ..count..), fill = '#66c2a5', color = '#004d40', bins = 30) +
+  geom_freqpoly(color = "#e34a33", size = 1) +
+  facet_wrap(~ Variable, scales = "free", ncol = 2) +
+  theme_minimal() + 
+  labs(title = "Histograms of Selected Variables", y = "Frequency") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(p)
+
+
+for(i in 1:length(variables)) {
+    df_subset <- df_long[df_long$Variable == var_names[i], ]
+    
+    p <- ggplot(df_subset, aes(x = Value)) + 
+      geom_histogram(aes(y = ..count..), fill = '#66c2a5', color = '#004d40', bins = 30) +
+      geom_freqpoly(color = "#e34a33", size = 1) +
+      labs(title = paste("Histogram of", var_names[i]), y = "Frequency") +
+      theme_minimal() + 
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    print(p)
+}
+
+```
+
+
+## Outliers
+
+## Boxplots- Boxplots are useful to visualize outliers and helpful to understand the spread and skewness of the data and they also show the median, quartiles, and potential outliers for each variable.
+
+
+```{r}
+
+for(i in 1:length(variables)) {
+  p <- ggplot(Cleaned_bitcoin_mining, aes(y = Cleaned_bitcoin_mining[[variables[i]]])) + 
+    geom_boxplot(fill = '#66c2a5', color = '#004d40', outlier.color = "red", outlier.size = 2) +
+    labs(title = paste("Box Plot of", var_names[i]), y = var_names[i]) +
+    theme_minimal() 
+  
+  print(p)
+}
+
+
+```
+
+
+## IQR 
+
+```{r}
+
+variables <- c('power.GUESS..GW', 'annualised.consumption.GUESS..TWh', 'Estimated.efficiency..J.Th', 
+               'Hydro.only..MtCO2e', 'Estimated..MtCO2e', 'Coal.only..MtCO2e', 
+               'Emission.intensity..gCO2e.kWh', 'Hash.rate.MH.s')
+
+
+# sapply function is used to apply a finction to each variable in the 'variables'
+
+outliers_counts <- sapply(variables, function(var) {
+
+  Q1 <- quantile(Cleaned_bitcoin_mining[[var]], 0.25)
+  Q3 <- quantile(Cleaned_bitcoin_mining[[var]], 0.75)
+  IQR <- Q3 - Q1
+  
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  
+  outliers <- Cleaned_bitcoin_mining[[var]][Cleaned_bitcoin_mining[[var]] < lower_bound | 
+                                           Cleaned_bitcoin_mining[[var]] > upper_bound]
+  
+  length(outliers)
+})
+
+names(outliers_counts) <- variables
+
+outliers_counts
+
+
+
+```
+
+#### Bitcoin's popularity, mining difficulty, and technology have evolved over time. Extreme values in recent years might reflect genuine shifts in the ecosystem and whereas early outliers might indicate data sparsity or other anomalies.
+
+
+## Cap/Floor Outliers- Instead of removing the outliers, we can cap them. 
+
+#### If we feel like the extreme values are genuine or not errors which influences the analysis, we acn consider capping them at a threshold like the lower and upper bound determined by the IQR method as this retains the data but reduces the skewness.
+
+#### For example, any value below the lower bound can be set to the lower bound value and similar for the upper bound and this approach retains the outliers.
+
+
+```{r}
+
+Cleaned_bitcoin_mining_copy <- Cleaned_bitcoin_mining
+
+for(var in variables) {
+  
+  Q1 <- quantile(Cleaned_bitcoin_mining_copy[[var]], 0.25)
+  Q3 <- quantile(Cleaned_bitcoin_mining_copy[[var]], 0.75)
+  IQR <- Q3 - Q1
+  
+
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  
+  Cleaned_bitcoin_mining_copy[[var]] <- ifelse(Cleaned_bitcoin_mining_copy[[var]] < lower_bound, lower_bound, 
+                                               ifelse(Cleaned_bitcoin_mining_copy[[var]] > upper_bound, upper_bound, 
+                                                      Cleaned_bitcoin_mining_copy[[var]]))
+}
+
+summary(Cleaned_bitcoin_mining_copy[variables])
+
+
+df_long_capped <- Cleaned_bitcoin_mining_copy %>%
+  select(all_of(variables)) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value")
+
+df_long_capped$Variable <- factor(df_long_capped$Variable, levels = variables, labels = var_names)
+
+p_capped <- ggplot(df_long_capped, aes(x = Value)) + 
+  geom_histogram(aes(y = ..count..), fill = '#66c2a5', color = '#004d40', bins = 30) +
+  geom_freqpoly(color = "#e34a33", size = 1) +
+  facet_wrap(~ Variable, scales = "free", ncol = 2) +
+  theme_minimal() + 
+  labs(title = "Histograms of Capped Variables", y = "Frequency") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(p_capped)
+
+for(i in 1:length(variables)) {
+    df_subset <- df_long_capped[df_long_capped$Variable == var_names[i], ]
+    
+    p <- ggplot(df_subset, aes(x = Value)) + 
+      geom_histogram(aes(y = ..count..), fill = '#66c2a5', color = '#004d40', bins = 30) +
+      geom_freqpoly(color = "#e34a33", size = 1) +
+      labs(title = paste("Capped Histogram of", var_names[i]), y = "Frequency") +
+      theme_minimal() + 
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    print(p)
+}
+```
+
+
+
+
+#### After capping and flooring, the extreme values in the data were limited to a more standadized range. The capped/floored data likely still retains its right- skewed nature for many variables. 
+
+
+#### The spread of data might appear more compact now without the long tails that were previously present due to outliers.
+
+
+
+## Apply log transformation - Log transformation is a dta transformation method in which it replaces each variable x with a log(x).
+
+
+#### If the data is heavly skewed, by applying the log transformation we can make the data more interpretable and it is especially useful when there are extreme values or outliers.
+
+#### For right- skewed data, if we use log transformation, we can compress the long tail and make the distribution more symmetrical.
+
+#### It has the effect of compressing the higher values more than the lower values, which can be particularly useful for right skewed data.
+
+##### After the log-transformation, we expect the peaks of these polygons to shift towards the center, indicating a more normalised distribution. Outliers will be closer to the main data cluster, making them less extreme
+
+
+
+```{r}
+
+Cleaned_bitcoin_mining_log <- Cleaned_bitcoin_mining
+for (var in variables) {
+  Cleaned_bitcoin_mining_log[[paste0("log_", var)]] <- log1p(Cleaned_bitcoin_mining[[var]])
+}
+
+log_variables <- paste0("log_", variables)
+df_long_log <- Cleaned_bitcoin_mining_log %>%
+  select(all_of(log_variables)) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value")
+
+log_var_names <- paste0("Log(", var_names, ")")
+df_long_log$Variable <- factor(df_long_log$Variable, levels = log_variables, labels = log_var_names)
+
+p_log <- ggplot(df_long_log, aes(x = Value)) + 
+  geom_histogram(aes(y = ..count..), fill = '#66c2a5', color = '#004d40', bins = 30) +
+  geom_freqpoly(color = "#e34a33", size = 1) +
+  facet_wrap(~ Variable, scales = "free", ncol = 2) +
+  theme_minimal() + 
+  labs(title = "Histograms of Log-transformed Variables", y = "Frequency") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(p_log)
+
+for(i in 1:length(log_variables)) {
+    df_subset <- df_long_log[df_long_log$Variable == log_var_names[i], ]
+    
+    p <- ggplot(df_subset, aes(x = Value)) + 
+      geom_histogram(aes(y = ..count..), fill = '#66c2a5', color = '#004d40', bins = 30) +
+      geom_freqpoly(color = "#e34a33", size = 1) +
+      labs(title = paste("Log-transformed Histogram of", log_var_names[i]), y = "Frequency") +
+      theme_minimal() + 
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    print(p)
+}
+
+
+```
+
+
+#### log1p function is used for tthe transformation because it computes the natural algorithm of 1 + x. It is useful for cases for cases where values might be zero as it ensures the transformed value remains defined.
+
+#### It can help stabilize the variance making the data more normal- distribution and reduce the influence of outliers, especially for right skewed data.
+
+
+
+## Segmentation Analysis- It's a method used to divide a data set into subsets (with outliers(original data) & without outliers)
+
+#### Instead of removing the outliers, we can perform segemented analysis, one with the entire dataset and one without outliers.
+
+
+```{r}
+
+data_without_outliers <- Cleaned_bitcoin_mining
+
+for (var in variables) {
+  
+  Q1 <- quantile(Cleaned_bitcoin_mining[[var]], 0.25)
+  Q3 <- quantile(Cleaned_bitcoin_mining[[var]], 0.75)
+  IQR <- Q3 - Q1
+  
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  
+  data_without_outliers <- data_without_outliers[data_without_outliers[[var]] >= lower_bound & data_without_outliers[[var]] <= upper_bound, ]
+}
+
+data_with_outliers <- Cleaned_bitcoin_mining
+
+summary_without_outliers <- summary(data_without_outliers[variables])
+summary_with_outliers <- summary(data_with_outliers[variables])
+
+list(Without_Outliers = summary_without_outliers, With_Outliers = summary_with_outliers)
+
+
+
+```
+
+## Bi-variate Analysis- Analzing the relationship between two or more variables.
+
+## Correlation matrix
+
+```{r}
+correlation_matrix <- cor(selected_data, use = "complete.obs")
+
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF",
+                          "#77AADD", "#4477AA"))
+
+names <- c("Power guess", "Annualised consumption guess", "Estimated.efficiency", "Hydro-only MtCO2eq", "Estimated MtCO2eq", "Coal-only MtCO2eq", "Emission intensity", "Hash rate")
+
+colnames(correlation_matrix) <- names
+rownames(correlation_matrix) <- names
+
+corrplot(correlation_matrix,  # Replace with your correlation matrix
+          method = "color",  # Use color to represent correlations
+          col = col(200),  # Color palette
+          type = "full",  # Display the upper triangle of the matrix
+          order = "hclust",  # Order variables using hierarchical clustering
+          addCoef.col = "black",  # Color of correlation coefficient labels
+          tl.col = "black",  # Text label color
+          tl.srt = 45,  # Text label rotation angle
+          tl.cex = 0.8,
+          sig.level = 0.01,  # Significance level
+          insig = "blank",  # Display "blank" for insignificant correlations
+          # Hide correlation coefficient on the principal diagonal
+          diag = TRUE
+)
+```
+
+
+# spatial analysis 1 - map visualization(avg_bitcoin hashrate)
+
+```{r}
+library(ggplot2)
+library(ggmap)
+library(raster)
+library(rgeos)
+library(maps)
+library(knitr)
+library(rgdal)
+library(sf)
+library(tidyverse)
+library(ggthemes)
+
+# Load map data
+world_map <- map_data("world") %>%
+  filter(!long > 180)
+
+# Create a data frame to hold your CSV data
+df3 <- read.csv("Regional harshrate global 1-3.csv")
+
+# Rename the "country" column to "region" to match your map data
+colnames(df3)[colnames(df3) == "country"] <- "region"
+
+# Group and summarize the data
+df3_pre <- df3 %>%
+  group_by(region) %>%
+  summarise(
+    avg_monthly_hashrate = mean(monthly_hashrate)
+  )
+
+# Merge the map and CSV data
+merge_result <- merge(world_map, df3_pre, by = "region", all.x = TRUE)
+
+# Create a map visualization - avg_monthly_hasgrate
+ggplot(data = merge_result) +
+  geom_polygon(aes(x = long, y = lat, group = group, fill = avg_monthly_hashrate)) +
+  expand_limits(x = merge_result$long, y = merge_result$lat) +
+  coord_map("moll") +
+  labs(fill = "avg_monthly_hashrate") +
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +  # Adjust the colors here
+  theme_map()
+
+```
+
+# Scatterplot of hashrate of regional Data
+```{r}
+df <- read.csv("Regional harshrate global 1.csv")
+df$date <- as.Date(df$date)
+
+df <- df %>%
+  mutate(year = lubridate::year(date),  
+         month = lubridate::month(date))
+
+countries <- unique(df$country)
+plot_list <- lapply(countries, function(country) {
+  country_df <- df %>% filter(country == !!country)
+  p <- ggplot(country_df, aes(x = as.Date(paste(year, month, "01", sep = "-")), y = monthly_absolute_hashrate_EH.S)) +
+    geom_line(color = "blue") +
+    geom_point(shape = 21, color = "black", fill = "red", size = 1) +
+    labs(x = "Date", y = "Hashrate") +
+    theme_minimal() +
+    ggtitle(paste("Bit_Hashrate", country))
+    
+  # Create a plot title with a smaller size
+  p <- p + theme(plot.title = element_text(size = 10))
+
+  # Print the plot
+  print(p)
+
+  return(p)
+})
+
+
+
+## Sample T-test to compare the Power.Guess..GW before and after jan 1st 2013
+
+
+#### The T-test is used to deterrmine if there is a statististically significant difference between the means of two groups. 
+
+
+
+```{r}
+
+
+before_2013 <- subset(Cleaned_bitcoin_mining, Date.and.Time < as.Date("2013-01-03"))
+after_2013 <- subset(Cleaned_bitcoin_mining, Date.and.Time >= as.Date("2013-01-03"))
+
+t_result <- t.test(before_2013$power.GUESS..GW, after_2013$power.GUESS..GW)
+
+print(t_result)
+
+
+```
+
+
+## T-test for Selected Variables
+
+```{r}
+
+results <- list()
+
+for(var in variables) {
+
+    if(any(is.na(before_2013[[var]])) || any(is.na(after_2013[[var]]))) {
+        results[[var]] <- "Contains NA values"
+    } else if(length(unique(before_2013[[var]])) == 1 || length(unique(after_2013[[var]])) == 1) {
+
+        results[[var]] <- "Constant values in one or both periods"
+    } else {
+        result <- t.test(before_2013[[var]], after_2013[[var]])
+        results[[var]] <- result
+    }
+}
+
+for(var in variables) {
+    cat("T-test results for", var, ":\n")
+    print(results[[var]])
+    cat("\n---------------------------------------------\n")
+}
+
+```
+
+
+## References
+
+Bitcoin Network Hash Rate, NASDAQ 2023, https://data.nasdaq.com/data/BCHAIN/HRATE-bitcoin-hash-rate
+
+Cambridge Bitcoin Electricity Consumption Index 2023, https://ccaf.io/cbnsi/cbeci.
