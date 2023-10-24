@@ -14,7 +14,6 @@ knitr::opts_chunk$set(echo = TRUE)
 library(sf)
 library(ggplot2)
 library(rnaturalearth)
-library(rnaturalearthdata)
 library(plotly)
 library(ggrepel)
 library(scales)
@@ -22,7 +21,7 @@ library(scales)
 
 
 ```{r}
-data <- read.csv("/Users/kusumsaichowdary/Downloads/Regional harshrate global 1-3.csv")
+data <- read.csv("/Users/kusumsaichowdary/Downloads/regional_da.csv")
 
 head(data)
 ```

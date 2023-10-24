@@ -17,6 +17,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(lubridate)
 library(dplyr)
 library(ggplot2)
+library(tidyr)
 library(rlang)
 library(gridExtra)
 library(ggthemes)
@@ -143,6 +144,31 @@ for(i in 1:length(variables)) {
     
     print(p)
 }
+
+
+for(i in 1:length(variables)) {
+    qq <- ggplot(Cleaned_bitcoin_mining, aes(sample = Cleaned_bitcoin_mining[[variables[i]]])) +
+        geom_qq() +
+        geom_qq_line() +
+        labs(title = paste("QQ Plot of", var_names[i])) +
+        theme_minimal()
+    
+    print(qq)
+}
+
+
+plot_list <- list()
+for(i in 1:length(variables)) {
+    p <- ggplot(Cleaned_bitcoin_mining, aes(sample = Cleaned_bitcoin_mining[[variables[i]]])) +
+        geom_qq() +
+        geom_qq_line() +
+        labs(title = paste("QQ Plot of", var_names[i])) +
+        theme_minimal()
+    
+    plot_list[[i]] <- p
+}
+
+grid.arrange(grobs = plot_list, ncol = 2)
 
 ```
 

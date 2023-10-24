@@ -1,0 +1,135 @@
+---
+title: "SPA1"
+author: "Kusum Sai Chowdary Sannapaneni"
+date: "2023-10-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+
+library(tidyverse)
+library(ggplot2)
+library(sf)
+library(tmap)
+library(plyr)
+library(dplyr)
+library(sp)
+
+```
+
+
+```{r}
+
+data <- read.csv("/Users/kusumsaichowdary/Downloads/regional_data.csv")
+
+head(data)
+```
+
+
+```{r}
+
+summary(data$monthly_absolute_hashrate_EH.S)
+
+sum(is.na(data))
+
+
+unique(data$country)
+
+range(data$date)
+
+
+```
+
+```{r}
+
+world <- st_read("https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json")
+
+mismatched_countries <- setdiff(data$country, world$name)
+print(mismatched_countries)
+
+```
+
+
+```{r}
+
+data$country[data$country == "Mainland China"] <- "China"
+data$country[data$country == "Russian Federation"] <- "Russia"
+data$country[data$country == "United States"] <- "United States of America"
+data$country[data$country == "Iran, Islamic Rep."] <- "Iran"
+data$country[data$country == "Germany *"] <- "Germany"
+data$country[data$country == "Ireland *"] <- "Ireland"
+
+data <- data[data$country != "Other", ]
+
+
+world_df <- as.data.frame(world)
+```
+
+```{r}
+data_agg <- data %>%
+  group_by(country) %>%
+  select(country, monthly_absolute_hashrate_EH.S) %>%
+  distinct() %>%
+  as.data.frame()
+
+
+merged_data <- left_join(world_df, data_agg, by = c("name" = "country"))
+
+merged_sf_original <- st_as_sf(merged_data)
+
+
+ggplot(data = merged_sf_original) +
+  geom_sf(aes(fill = monthly_absolute_hashrate_EH.S), color = "white", size = 0.2) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue", 
+                      na.value = "grey50", guide = "colorbar", 
+                      name = "Monthly Absolute Hashrate (EH/s)") +
+  labs(title = "Monthly absolute hashrate by country from September 2019 to January 2022") +
+  theme_minimal()
+
+```
+
+
+
+#### This plot visualizes the monthly absolute hashrate for different countries using a choropleth map, a type of thematic map where the areas shaded based on the value of a variable. from looking at the map we can say that hashrate isn't evenly distributed globally but is concentrated in specific regions or countries due to various factors like technology infrastructure, regulations or energy costs.
+
+#### The colour gradiant ranges from light blue (reprenting lower values) to darkblue (representing higher values) which is used to represent the monthly absolute hashrate value for each country. Any country without data(Na values) is colored in grey.
+
+
+#### The countries which are shaded dark blue, it would suggest that region as a whole is a significant contributor to hashrate. The countries with higher hashrates might be inferred to have a more significant investment or infrastructure related to the domain.
+
+
+
+
+
+```{r}
+
+data_agg <- data %>%
+  group_by(country) %>%
+  mutate(mean_hashrate = mean(monthly_absolute_hashrate_EH.S, na.rm = TRUE)) %>%
+  select(country, mean_hashrate) %>%
+  distinct() %>%
+  as.data.frame()
+
+
+merged_data <- left_join(world_df, data_agg, by = c("name" = "country"))
+
+merged_sf <- st_as_sf(merged_data)
+
+
+ggplot(data = merged_sf) +
+  geom_sf(aes(fill = mean_hashrate), color = "white", size = 0.2) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue", 
+                      na.value = "grey50", guide = "colorbar", 
+                      name = "Average Monthly Absolute Hashrate (EH/s)") +
+  labs(title = "Average Monthly Absolute Hashrate by Country from September 2019 to January 2022") +
+  theme_minimal()
+
+
+
+```
+
