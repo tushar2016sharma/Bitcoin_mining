@@ -1,0 +1,683 @@
+---
+title: "Exploring the Environmental Impacts of Bitcoin Mining" 
+output: html_document
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+```{r setup, include = FALSE, out.width = "100%", out.height = "100%"}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+
+#options(repos = c(CRAN = "https://cloud.r-project.org/"))
+```
+
+```{r, include = FALSE}
+#install.packages("corrplot")
+#install.packages("GGally")
+
+library(devtools)
+library(ggplot2)
+library(lubridate)
+library(ggthemes)
+library(tidyverse)
+library(gridExtra)
+library(scales)
+library(dplyr)
+library(zoo)
+library(corrplot)
+library(GGally)
+library(sf)
+library(tmap)
+library(plyr)
+library(sp)
+```
+<br>
+
+##### **Authors**: Tushar Sharma, Kusum Sai Chowdary, Brian Kim
+
+##### **Keywords-** Bitcoin mining, exploratory data analysis, hash rate
+
+<br>
+
+**Abstract-** This research project comprehensively analyzes the environmental consequences of Bitcoin mining through data and statistical analysis. The study focuses on two primary objectives which are referred to as SMART (Specific Measurable Attainable Relevant and Timely) questions: 1) What are the impacts of different variables on the carbon dioxide emission intensity? and 2) How does the Bitcoin mining activity (network hash rate) vary with regional variations? The findings of this study inform policy decisions and industry practices in the cryptocurrency sector, specifically addressing concerns related to greenhouse gas emissions and environmental sustainability.
+
+
+## Introduction
+
+In the world of finance and investment, Bitcoin has emerged as a transformative digital cryptocurrency, revolutionizing traditional economic paradigms and offering a decentralized alternative for transactions. The foundation of Bitcoin mining lies in the ingenious "proof of work" (PoW) algorithm, a complex mechanism designed to validate transactions and secure the network. Miners face the formidable challenge of discovering a specific nonce, a seemingly random number that, when combined with the block's contents, produces a hash value that adheres to predefined criteria. This process necessitates substantial computational power and operates through trial and error, with miners employing specialized hardware, including Application-Specific Integrated Circuits (ASICs) and Graphics Processing Units (GPUs), meticulously engineered for efficient PoW calculations. While Bitcoin mining plays a vital role in upholding network security and trust, it also carries a significant environmental cost. The surging energy consumption of Bitcoin mining, exacerbated by its rapid expansion, has raised concerns about its contribution to greenhouse gas emissions and global climate change. These concerns necessitate a thorough analysis of the intricate relationship between Bitcoin mining and the environmental impacts. The inception of blockchain technology can be attributed to Bitcoin, which marked the initial and successful endeavor to authenticate transactions using a decentralized data protocol. Engaging in the validation of these transactions demands specific hardware and substantial energy usage, resulting in a substantial carbon footprint [1].
+
+The evolution of the field of Bitcoin mining and its environmental consequences mirrors the dynamic growth and transformation of the broader cryptocurrency ecosystem. In the early days of Bitcoin, mining was a relatively obscure and niche activity, with a limited number of enthusiasts participating in the network. Miners often operated on personal computers, and the energy footprint was minimal. However, as Bitcoin's value surged and its popularity grew, the landscape of mining underwent a profound shift. With the advent of ASICs and more specialized hardware, miners gained a substantial edge in terms of computational power and efficiency. This development paved the way for large-scale mining operations and industrial mining farms. Consequently, the energy consumption associated with Bitcoin mining skyrocketed, resulting in increased scrutiny and environmental concerns. Based on our 2017 estimates, Bitcoin's energy consumption was on par with that of Angola or Panama, which were ranked 102nd and 103rd in terms of total energy consumption. To put it in perspective, Bitcoin used about 948 MW, equivalent to 8.3 billion kWh annually [2].
+
+The environmental consequences of Bitcoin mining have become a central topic of debate and research within the cryptocurrency space. As Bitcoin's market capitalization continued to rise, so did its energy consumption. This evolution prompted researchers to explore the environmental impact more deeply and assess the sustainability of the PoW consensus mechanism. As Bitcoin's environmental impact has garnered greater attention, it has also sparked discussions about potential solutions and alternatives. Innovations like proof-of-stake (PoS) and other consensus mechanisms designed to be more energy-efficient have gained traction in the cryptocurrency community. Researchers and industry stakeholders are actively exploring how to mitigate the environmental consequences of Bitcoin mining while preserving the network's security and integrity.
+
+This research project aims to contribute to this evolving field by understanding Bitcoin mining activity through Exploratory Data Analysis and statistical analysis and exploring its environmental consequences in order to inform policies and industry practices. The paper is organized into three main sections: The first section provides an overview of the data used in the study and outlines the methodology employed, with a particular focus on the exploratory data analysis (EDA) techniques applied. The second section presents the results of the EDA, shedding light on the intricate relationships and dependencies uncovered through the analysis. The final section offers conclusions drawn from the findings.
+
+## Data and methodology
+The data has been taken from the [Cambridge Centre for Alternative Finance (CCAF) website](https://ccaf.io/cbnsi/cbeci) [3]. The data available on the website is real-time data. Also, different types of information pertaining to Bitcoin mining is available in separate sections on the website. This information has been combined in the form of different features and made into one single dataset consisting of 4815 records and 15 initial features. The records start from Jul 18, 2010 to Sep 22, 2023. The data for spatial analysis includes monthly absolute and percentage hash rate values for different countries and is added to this data. The network hash rate data has been taken from the [NASDAQ website](https://data.nasdaq.com/data/BCHAIN/HRATE-bitcoin-hash-rate) [4]. The summary statistics of the data in R is given below:
+
+#### Summary Statistics
+
+```{r, include = FALSE}
+# Load the CSV data
+#bitcoin_mining <- read.csv("/Users/kusumsaichowdary/Documents/GitHub/Bitcoin_mining/bitcoin_mining.csv")
+#bitcoin_mining <- read.csv("C:\\Users\\tusha\\Downloads\\bitcoin_mining.csv")
+bitcoin_mining <- read.csv("https://raw.githubusercontent.com/tushar2016sharma/Bitcoin_mining/main/bitcoin_mining.csv")
+
+# Create a DataFrame from the loaded data
+bitcoin_mining <- data.frame(bitcoin_mining)
+dim(bitcoin_mining)
+
+# Select specific columns and removed 
+data <- subset(
+  bitcoin_mining, select = c(
+  "Date.and.Time", "power.GUESS..GW", "annualised.consumption.GUESS..TWh",   "Estimated.efficiency..J.Th", "Hydro.only..MtCO2e", "Estimated..MtCO2e",  "Coal.only..MtCO2e", "Emission.intensity..gCO2e.kWh", "Hash.rate.MH.s"
+  )
+)
+```
+
+```{r, echo = FALSE}
+summary(data)
+```
+
+The EDA techniques employed in this study are: time series analysis, data distribution and outlier detection, feature correlation, and spatial analysis. These are discussed below:
+
+#### A. Time series analysis
+Time series analysis is a statistical method that focuses on the study and interpretation of data collected or recorded at regular time intervals. It is particularly useful for data that exhibits temporal patterns, dependencies, and trends. Unlike cross-sectional data, which is gathered at a single point in time, time series data represents a sequence of observations linked to specific time points. All the numerical features in this study are time series features. The stationarity of time series means that the statistical properties, such as the mean and variance, remain constant over time, indicating that the data does not exhibit long-term trends or seasonality. If these properties change over time, then a time series is said to be non-stationary. 
+
+In this study, the time series of the 8 features are plotted which shows the trends of Bitcoin mining activity over time since its beginning. The stationarity analysis of all the series is then carried out using a two year window size. A window size represents the fixed time interval for which the statistical properties of the data are computed over the entire length of data. So, a window size of two year means that the mean and standard deviation of the years 2010-2012, 2012-2014, 2014-2016, and so on, are computed.
+
+#### B. Data distribution and outlier detection
+Analyzing the data distribution is a common preliminary step in any data analysis task. It provides essential insights into the central tendencies, variations, and patterns in the data. In this study, two common techniques used for visualizing data distributions used are histograms and box plots. 
+
+**Outlier detection**: Outlier detection is a critical aspect of data analysis and statistical modeling. It involves identifying data points that significantly deviate from the norm or expected patterns within a dataset. Outliers are data points that are notably different from the majority of other data points and can be the result of various factors, including errors, anomalies, or genuine extreme events. 
+
+#### C. Feature correlation
+Feature correlation is a fundamental concept in data analysis that measures the statistical relationship or association between pairs of features (variables) within a dataset. It helps analysts understand how different features interact with one another. The Pearson correlation coefficient, often denoted as "r", is a measure of the linear relationship or correlation between two continuous variables. It quantifies the extent to which these two variables change together, indicating the direction (positive or negative) and the strength of the relationship.
+
+#### D. Spatial analysis
+In data analysis, spatial analysis is a crucial component that focuses on examining and interpreting data in the context of geographic or spatial locations. It involves the use of various techniques and methods to analyze and visualize data that has a spatial component, such as geographic coordinates, addresses, or regions. 
+
+## Results
+
+```{r, fig.height = 5, fig.width = 10, fig.align = 'center', fig.cap = '**Fig. 1. Time series of the eight features retained.**'}
+time_series_list <- list()
+
+bitcoin_mining$Date.and.Time <- as.Date(bitcoin_mining$Date.and.Time)
+
+columns_to_plot <- c("power.GUESS..GW", "annualised.consumption.GUESS..TWh", "Estimated.efficiency..J.Th", "Hydro.only..MtCO2e", "Estimated..MtCO2e", "Coal.only..MtCO2e", "Emission.intensity..gCO2e.kWh", "Hash.rate.MH.s")
+
+cols <- c("Power guess (GW)", "Annualised consumption guess (TWh)", "Estimated efficiency J/Th", "Hydro-only MtCO2eq", "Estimated MtCO2eq", "Coal-only MtCO2eq", "Emission intensity gCO2eq/kWh", "Hash rate (MH/s)")
+
+plot_width <- 14
+plot_height <- 7
+
+for (i in 1:length(columns_to_plot)) {
+  col <- columns_to_plot[i]
+  col_name <- cols[i]
+
+  # Calculate appropriate date breaks based on data
+  breaks <- ifelse(max(bitcoin_mining$Date.and.Time, na.rm = TRUE) - min(bitcoin_mining$Date.and.Time, na.rm = TRUE) > 2 * 365,
+                   date_breaks("2 year"), date_breaks("1 year"))
+
+  p <- ggplot(bitcoin_mining, aes(x = Date.and.Time, y = .data[[col]])) +
+    geom_line(color = "blue", alpha = 0.8) +
+    labs(x = if (i > 4) "Date" else "", y = col_name) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 7),
+          axis.text.y = element_text(size = 7),
+          axis.title.x = element_text(size = 7),
+          axis.title.y = element_text(size = 7)) +
+    scale_x_date(breaks = breaks, date_labels = "%Y", expand = c(0, 0))
+
+  time_series_list[[col]] <- p
+}
+
+grid.arrange(grobs = time_series_list, ncol = 4, width = plot_width * 4, height = plot_height * 2)
+```
+
+****
+
+Power Consumption (in GW) over Time: The data illustrates a rapid increase in power consumption and annualized power consumption over time. They remain relatively stable in the initial years and then witness a significant spike. These fluctuations might be attributed to various factors such as changes in Bitcoin's price, mining profitability, advances in mining hardware, or the overall growth of the Bitcoin network.
+
+Annualized power consumption (in TWh) over time: Similar to the power consumption plot, the annualized consumption showcases a consistent growth pattern, with a significant increase in recent years. There's a noticeable surge in recent years, which might be attributed to the increasing popularity and acceptance of Bitcoin, leading to more miners joining the network and thus consuming more power.
+
+Estimated efficiency J/Th: This plot showcases a general decreasing trend over time, meaning that mining operations become more energy-efficient, requiring fewer joules of energy to produce a terahash. The steady decrease can be attributed to technological advancements in mining hardware. There are periods where the efficiency remains relatively constant, possibly indicating times when there are no significant advancements in mining technology.
+
+Carbon emissions (in MtCO2e): Next, the environmental impact of Bitcoin mining is analyzed by visualizing the carbon emissions (in MtCO2e) over time. A work by Calvo-Pardo et al. (2022) deals with similar analysis utilizing machine learning methods [5]. Hydro-only Emissions: When considering hydroelectric power as the sole source, emissions are significantly lower. This emphasizes the cleaner nature of hydroelectric power. Coal-only Emissions: On the other end, when considering coal as the sole power source, emissions are much higher. This highlights the environmental concerns associated with coal-based power sources. Estimated Emissions: The estimated emissions lie between the hydro-only and coal-only values, suggesting a mix of power sources. All three emission metrics showcase a steady increase over time, aligning with the growth in power consumption and annualized consumption trends observed earlier. Switching to cleaner energy sources can drastically reduce the carbon footprint of the Bitcoin network.
+
+Emission Intensity over Time: Next, we visualize the emission intensity over time. This shows how efficiently Bitcoin mining is conducted in terms of carbon emissions relative to power consumption. The emission intensity remains relatively stable during the initial period. As time progresses, fluctuations in the emission intensity can be observed. This suggests variability in the efficiency of Bitcoin mining in terms of carbon emissions relative to power consumption. There is a rising trend in emission intensity. This could be attributed to increased mining activities, possibly relying more on non-renewable energy sources.
+
+Hash Rate (in MH/s) over Time: Finally, the hash rate over time has been analyszed. The hash rate indicates the computational power used in mining and transaction confirmations. It reflects the growth in mining activity and the evolution of mining technology. The hash rate exhibits massive growth over the years, indicating an exponential increase in the computational power dedicated to Bitcoin mining. The growth in the hash rate can be attributed to the evolution of mining technology, from basic CPU mining in the early days to GPU, FPGA, and ASIC mining in more recent times. A higher hash rate means the Bitcoin network is more secure against attacks. However, it also suggests higher energy consumption, as observed in the power consumption plots.
+
+Conclusively, the data and plots show the evolution of Bitcoin mining over time, from its nascent stages to its current state. The increase in power consumption, annualized consumption, carbon emissions, and hash rate points to the growing popularity and scale of Bitcoin. However, the environmental implications, especially in terms of carbon emissions, highlight the importance of using sustainable and renewable energy sources for mining activities.
+
+****
+
+### Stationarity Analysis: 
+
+In the context of time series analysis, a stationary process is one in which statistical properties like mean, variance, and standard deviation remain constant over time. This means that the series does not exhibit any predictable long-term patterns. Conversely, if these statistical properties change over time, the time series is considered non-stationary. The importance of stationarity in time series analysis can be summarized for two main reasons:
+
+1. Predictability: Stationarity is crucial for many forecasting methods. When a time series exhibits a consistent behavior over time, it is more likely to continue following the same pattern in the future. This makes it easier to predict future values based on historical data.
+
+2. Model Simplicity: Stationary processes are simpler to model. Non-stationary data often require additional steps such as differencing or transformations to make them stationary, which can add complexity to the modeling process.
+
+Here are some key reasons why stationarity analysis is essential:
+
+1. Model Assumptions: Many time series models, such as ARIMA (AutoRegressive Integrated Moving Average), assume that the underlying data is stationary. If the data is not stationary, these models may produce unreliable or inaccurate predictions.
+
+2. Detecting Root Causes: Stationarity analysis can help identify the underlying factors responsible for changes in the time series. For example, a sudden change in variance might indicate external factors, such as a market crash or a major event, affecting the time series. Detecting and understanding these root causes can be essential for making informed decisions.
+
+3. Improving Model Performance: Converting a non-stationary time series into a stationary one can lead to better model performance. A stationary series is more predictable, making it easier for models to capture and represent the underlying patterns in the data accurately.
+
+In summary, stationarity analysis is a fundamental step in time series analysis because it not only enables more accurate predictions but also simplifies the modeling process and helps in identifying the causes of variations in the data, leading to improved model performance.
+
+  
+```{r, fig.height = 6, fig.width = 10, fig.align = 'center', fig.cap = '**Fig. 2. Rolling mean and standard deviation of the features.**'}
+start_date <- as.Date("2010-07-18")
+end_date <- as.Date("2023-09-22")
+
+data_frame <- data.frame(Date = seq.Date(start_date, end_date, by = "weeks"))
+
+interval_weeks <- 104  # 2 years (approx 104 weeks)
+plot_list <- list()
+
+rename <- c("Power guess", "Ann. consumption guess", "Est. efficiency", "Hydro-only MtCO2eq", "Estimated MtCO2eq", "Coal-only MtCO2eq", "Emission intensity", "Hash rate")
+
+for (col_name in columns_to_plot) {
+  ts_data <- ts(bitcoin_mining[[col_name]], frequency = 365)
+
+  rolling_data <- data.frame(Date = as.Date(character(0)), RollingMean = numeric(0), RollingSD = numeric(0))
+
+  for (i in seq(start_date, end_date, by = paste(interval_weeks / 52, "years"))) {
+    interval_start <- i
+    interval_end <- i + 2 * 365  # 2 years in days
+
+    subset_data <- data_frame %>%
+      filter(Date >= interval_start, Date < interval_end)
+
+    mean_value <- mean(ts_data[subset_data$Date - start_date + 1])
+    sd_value <- sd(ts_data[subset_data$Date - start_date + 1])
+
+    rolling_data <- rbind(rolling_data, data.frame(Date = interval_start + 365, RollingMean = mean_value, RollingSD = sd_value))
+  }
+
+  rolling_data$Date <- as.Date(rolling_data$Date)
+
+  plot_data <- rolling_data %>%
+    filter(!is.na(RollingMean) & !is.na(RollingSD))
+
+  plot <- ggplot(plot_data, aes(x = Date)) +
+    geom_point(aes(y = RollingMean), color = "blue", size = 2) +
+    geom_line(aes(y = RollingMean), color = "blue", size = 1) +
+    geom_point(aes(y = RollingSD), color = "red", size = 2) +
+    geom_line(aes(y = RollingSD), color = "red", size = 1) +
+    labs(x = "Date", y = paste("Rolling Mean/SD of", rename[which(columns_to_plot == col_name)])) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8),  
+          axis.text.y = element_text(size = 8),  
+          axis.title.x = element_text(size = 8),  
+          axis.title.y = element_text(size = 8)) +
+    scale_x_date(date_labels = "%Y", date_breaks = "2 years")
+
+  plot_list[[col_name]] <- plot
+}
+
+grid.arrange(grobs = plot_list, ncol = 4, width = 14 * 4, height = 7 * ceiling(length(columns_to_plot) / 4))
+```
+
+****
+
+In this study, the time series of the 8 features are plotted which shows the trends of Bitcoin mining activity over time since its beginning. The stationarity analysis of all the series is then carried out using a two year window size. A window size represents the fixed time interval for which the statistical properties of the data are computed over the entire length of data. So, a window size of two year means that the mean and standard deviation of the years 2010-2012, 2012-2014, 2014-2016, and so on, are computed. Most series are non-stationary, The mining hardware efficiency series seems to be stationary since 2016.
+
+****
+
+### Univariate Analysis - Analyzing one variable at a time
+
+#### Histograms: 
+
+Histograms are indeed valuable tools in data analysis for understanding the distribution of continuous variables. They provide insights into key aspects of the dataset's distribution including, the central tendency, spread, and shape.
+
+```{r, fig.height = 6, fig.width = 6, fig.align = 'center', fig.cap = '**Fig. 3. Histograms of the features. The red curve shows the kernel density of the feature.**'}
+df_long <- bitcoin_mining %>%
+    select(all_of(columns_to_plot)) %>%
+    pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value")
+
+df_long$Variable <- factor(df_long$Variable, levels = columns_to_plot, labels = rename)
+
+
+hist_list <- list()
+
+individual_plot_width <- 7
+individual_plot_height <- 5
+
+for(i in 1:length(columns_to_plot)) {
+    df_subset <- df_long[df_long$Variable == rename[i], ]
+    
+    p <- ggplot(df_subset, aes(x = Value)) + 
+        geom_histogram(aes(y = ..count..), fill = 'lightblue',
+                       color = 'black', bins = 30) +
+        geom_freqpoly(color = "red2", size = 0.7) +
+        labs(x = paste(x = rename[i]), y = "Frequency") +
+        theme_minimal() + 
+        theme(axis.text.x = element_text(angle = 0, hjust = 1,
+                                         size = 7, face = "bold"),
+              axis.text.y = element_text(size = 7, face = "bold"),
+              axis.title.x = element_text(size = 7, face = "bold"),
+              axis.title.y = element_text(size = 7, face = "bold"),
+              plot.margin = margin(5, 5, 5, 5)) +
+        coord_cartesian(clip = 'off')
+    
+    hist_list[[i]] <- p
+}
+
+hist_plot <- grid.arrange(grobs = hist_list, ncol = 2, nrow = 4, widths = rep(individual_plot_width, 2), heights = rep(individual_plot_height, 4))
+```
+
+
+****
+
+Annualized Consumption (in TWh): The right-skewed distribution suggests that annualized consumption values are concentrated towards the lower end, with occasional spikes. This indicates that, for the most part, annualized consumption remains relatively low, with infrequent periods of higher consumption.
+
+Power (in GW): Similar to annualized consumption, the right-skewed distribution of power consumption values suggests that most values are on the lower end, with occasional spikes indicating higher power consumption.
+
+Efficiency (Lower Bound, Estimated, Upper Bound in J/Th): The right-skewed histograms for efficiency values imply that, for the majority of the time, efficiency is low, with sporadic periods of higher efficiency.
+
+Carbon Emissions (Hydro-only, Estimated, Coal-only in MtCO2e): These histograms also exhibit right-skewed distributions, indicating that carbon emissions are primarily on the lower side, with occasional spikes representing periods of higher emissions.
+
+Emission Intensity (gCO2e/kWh): The more bell-shaped histogram suggests a somewhat normal distribution for emission intensity. Most values cluster around the middle, indicating a consistent emission intensity for a significant duration.
+
+Hash Rate (MH/s): The right-skewed histogram for the hash rate indicates that, for the most part, the hash rate remains relatively low, with occasional spikes indicating periods of increased mining activity.
+
+The right-skewed distributions in many of these features indicate that higher values are less common and tend to occur as outliers or during specific spikes. These observations can provide valuable insights into the behavior of these variables over time. The occasional spikes in these features may be attributed to various factors such as significant events, technological advancements, or fluctuations in the Bitcoin market, highlighting the need for further analysis and investigation to understand the underlying causes of these spikes and their implications.
+
+****
+
+#### Boxplots:
+
+Boxplots are useful to visualize outliers and helpful to understand the spread and skewness of the data and they also show the median, quartiles, and potential outliers for each variable.
+
+
+```{r, fig.align = 'center', fig.cap = '**Fig. 4. Boxplots of the features. The red line displays the median value and the markers represent the outliers.**'}
+boxplot_list <- list()
+
+for (i in 1:length(columns_to_plot)) {
+    col <- columns_to_plot[i]
+    col_name <- cols[i]
+    
+   p <- ggplot(data, aes(x = factor(1), y = .data[[col]])) +
+        geom_boxplot(fill = "lightblue", color = "black", width = 0.5) +
+        geom_segment(aes(y = median(.data[[col]]), yend = median(.data[[col]]),
+                         x = 0.75, xend = 1.25), size = 0.7, color = 'red') +
+        geom_segment(aes(y = min(.data[[col]]), yend = min(.data[[col]]),
+                          x = 0.7, xend = 1.3), size = 0.7, color = 'black') +
+         geom_segment(aes(y = max(.data[[col]]), yend = max(.data[[col]]),
+                          x = 0.7, xend = 1.3), size = 0.7, color = 'black') +
+        labs(x = "", y = col_name) +
+        scale_fill_manual(values = c("lightblue")) + 
+        theme_minimal() +
+        theme(axis.text.x = element_blank(),
+              axis.text.y = element_text(size = 8.5),
+              axis.title.x = element_blank(),
+              axis.title.y = element_text(size = 8.5, margin=margin(0,6,0,0)),
+              plot.margin = margin(0,15,0,0)) +
+        ylim(0, max(data[[col]], na.rm = TRUE) * 1.2)  
+    
+    boxplot_list[[col]] <- p
+}
+grid.arrange(grobs = boxplot_list, ncol = 4, width = 14, height = 10)
+```
+
+****
+
+Bitcoin mining metrics exhibit significant variability over time. The estimated power and annualized consumption for mining primarily occupy the lower ranges, indicating infrequent instances of high consumption, while notable outliers suggest occasional surges. The efficiency of mining appears to remain fairly consistent, with few exceptions. Emissions from hydro sources generally remain low, but the estimated and coal-only emissions depict a broader spread, indicating fluctuations in environmental impact. Emission intensity remains relatively stable, with only a few deviations. Lastly, the hash rate, indicative of computational mining power, predominantly stays on the lower end but experiences periodic sharp increases. When the data is viewed on a logarithmic scale, it underscores the occasional spikes in these metrics over time. 
+
+****
+
+#### Inter-Quartile Range(IQR)
+
+Taking a statistical approach, outliers could be detected using the IQR method. This method involves several steps:
+
+1) Calculate the Interquartile Range (IQR) by subtracting the first quartile (Q1) from the third quartile (Q3).
+2) Set the lower boundary at Q1 minus 1.5 times the IQR and the upper boundary at Q3 plus 1.5 times the IQR.
+3) Consider any data point beyond these boundaries as an outlier.
+
+```{r}
+# sapply function is used to apply a finction to each variable in the 'variables'
+
+outliers_counts <- sapply(columns_to_plot, function(var) {
+
+  Q1 <- quantile(bitcoin_mining[[var]], 0.25)
+  Q3 <- quantile(bitcoin_mining[[var]], 0.75)
+  IQR <- Q3 - Q1
+  
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  
+  outliers <- bitcoin_mining[[var]][bitcoin_mining[[var]] < lower_bound | 
+                                           bitcoin_mining[[var]] > upper_bound]
+  
+  length(outliers)
+})
+
+names(outliers_counts) <- columns_to_plot
+
+outliers_counts
+```
+
+****
+By examining the count of outliers, it becomes evident that 'Estimated.efficiency' has 1097 outliers, 'Emission intensity' has 214 outliers, and 'Hash rate' has 254 outliers. No other features have any outliers in them. Given the nature of the data, it is apparent that these outliers do not result from errors but rather stem from fluctuations in Bitcoin prices and mining. Bitcoin's popularity, mining difficulty, and technology undergo continuous evolution. Extreme values in recent years likely signify authentic shifts in the ecosystem, whereas early outliers may point to data sparsity or other anomalies.
+
+Instead of eliminating the outliers, a more prudent approach is to cap them. In cases where extreme values actually reflect the underlying dynamics and are not arising from errors that might impact the analysis, they are considered for capping at specified thresholds. This is achieved using the lower and upper bounds determined by the IQR method, preserving the data while mitigating skewness.
+
+****
+
+#### Capping
+
+Capping serves as a method to restrict extreme values in statistical data, diminishing the influence of outliers. This action enhances the robustness of the data and minimizes the impact of outliers on the analysis.
+
+The capping method involves:
+1)Determining a threshold for the data.
+2)Any data points below the lower threshold are set to the lower threshold, and data points above the upper threshold are set to the upper threshold.
+
+```{r, fig.height = 6, fig.width = 6, fig.align = 'center', fig.cap = '**Fig. 5. Histograms of the features after capping.**'}
+bitcoin_mining_copy <- bitcoin_mining
+
+for(var in columns_to_plot) {
+  
+  Q1 <- quantile(bitcoin_mining[[var]], 0.25)
+  Q3 <- quantile(bitcoin_mining[[var]], 0.75)
+  IQR <- Q3 - Q1
+  
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  
+  bitcoin_mining_copy[[var]] <- ifelse(bitcoin_mining_copy[[var]] < lower_bound, lower_bound, 
+                                               ifelse(bitcoin_mining_copy[[var]] > upper_bound, upper_bound, 
+                                                      bitcoin_mining_copy[[var]]))
+}
+
+df_long_capped <- bitcoin_mining_copy %>%
+  select(all_of(columns_to_plot)) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value")
+
+df_long_capped$Variable <- factor(df_long_capped$Variable, levels = columns_to_plot, labels = rename)
+
+
+capping_list <- list()
+
+for(i in 1:length(columns_to_plot)) {
+    df_subset <- df_long_capped[df_long_capped$Variable == rename[i], ]
+    
+    p <- ggplot(df_subset, aes(x = Value)) + 
+        geom_histogram(aes(y = ..count..), fill = 'orange',
+                       color = 'black', bins = 30) +
+        geom_freqpoly(color = "violet", size = 0.7) +
+        labs(x = paste(x = rename[i]), y = "Frequency") +
+        theme_minimal() + 
+        theme(axis.text.x = element_text(angle = 0, hjust = 1,
+                                         size = 7, face = "bold"),
+              axis.text.y = element_text(size = 7, face = "bold"),
+              axis.title.x = element_text(size = 7, face = "bold"),
+              axis.title.y = element_text(size = 7, face = "bold"),
+              plot.margin = margin(5, 5, 5, 5)) +
+            coord_cartesian(clip = 'off')
+    
+    capping_list[[i]] <- p
+}
+
+cap_plot <- grid.arrange(grobs = capping_list, ncol = 2, nrow = 4, widths = rep(individual_plot_width, 2), heights = rep(individual_plot_height, 4))
+```
+
+****
+Fig. 5 displays the histograms for the features when capping is applied. A comparison with the original data distribution provides the following observations:
+
+Distribution Shape: Post-capping, the histograms have retained their overall shape, but extreme values have been limited, making the distributions appear smoother.
+
+Reduction in Outliers: The capping method has effectively reduced the influence of outliers, as evidenced by the smoother tails in the capped histograms compared to the original ones.
+
+Consistency in Distributions: Features like annualised consumption, power, and efficiency still display a right-skewed distribution. This indicates that the bulk of the data points are clustered towards the lower end, with fewer high values.
+
+The distribution for Emission Intensity remains relatively bell-shaped, suggesting a consistent emission intensity over time.
+
+Improved Clarity: With the reduction of extreme values, the histograms now provide clearer insights into the central tendencies and spreads of the features. This can be especially helpful when building predictive models, as extreme values can unduly influence model performance.
+
+Preservation of Information: While the capping method has limited extreme values, the primary characteristics of the distributions are preserved, ensuring that the essential information in the data remains intact.
+
+As the features are heavily right skewed, by applying the log transformation we can make the data more interpretable and it is especially useful when there are extreme values or outliers. if we use log transformation, we can compress the long tail and make the distribution more symmetrical. It has the effect of compressing the higher values more than the lower values, which can be particularly useful for right skewed data.
+
+****
+
+#### Log Transformation:
+
+Log transformation is a mathematical operation applied to each data point in a dataset. Specifically, it involves taking the natural logarithm of each data point.
+
+Reasons for Choosing the Log Transformation:
+
+1) Normalizing the Distribution: Log transformation can make skewed distributions more symmetric, approximating a normal distribution. This is particularly beneficial for many statistical techniques that assume normality.
+
+2) Decreasing the Effect of Outliers: By compressing the scale, log transformations can reduce the influence of extreme values (outliers). This can make patterns in the data more interpretable and models more stable.
+
+3) Multiplicative to Additive: Log transformation can convert multiplicative relationships to additive relationships, which can be easier to model and interpret.
+
+
+```{r, fig.height = 6, fig.width = 6, fig.align = 'center', fig.cap = '**Fig. 6. Histograms of the features after log-transformation.**'}
+bitcoin_mining_log <- bitcoin_mining
+for (var in columns_to_plot) {
+  bitcoin_mining_log[[paste0("log_", var)]] <- log1p(bitcoin_mining[[var]])
+}
+
+log_variables <- paste0("log_", columns_to_plot)
+df_long_log <- bitcoin_mining_log %>%
+  select(all_of(log_variables)) %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value")
+
+log_var_names <- paste0("Log(", rename, ")")
+df_long_log$Variable <- factor(df_long_log$Variable, levels = log_variables, labels = log_var_names)
+
+
+log_list <- list()
+
+for(i in 1:length(columns_to_plot)) {
+    df_subset <- df_long_log[df_long_log$Variable == log_var_names[i], ]
+    
+    p <- ggplot(df_subset, aes(x = Value)) + 
+        geom_histogram(aes(y = ..count..), fill = 'limegreen',
+                       color = 'black', bins = 30) +
+        geom_freqpoly(color = "red", size = 0.7) +
+        labs(x = paste(x = rename[i]), y = "Frequency") +
+        theme_minimal() + 
+        theme(axis.text.x = element_text(angle = 0, hjust = 1,
+                                         size = 7, face = "bold"),
+              axis.text.y = element_text(size = 7, face = "bold"),
+              axis.title.x = element_text(size = 7, face = "bold"),
+              axis.title.y = element_text(size = 7, face = "bold"),
+              plot.margin = margin(5, 5, 5, 5)) +
+            coord_cartesian(clip = 'off')
+    
+    log_list[[i]] <- p
+}
+
+log_plot <- grid.arrange(grobs = log_list, ncol = 2, nrow = 4, widths = rep(individual_plot_width, 2), heights = rep(individual_plot_height, 4))
+```
+
+****
+
+Fig. 7 displays the histograms for the log-transformed features. A comparison with the histograms after capping provides with the following observations:
+
+Reduction in Skewness: Features that previously exhibited right-skewness (such as annualized consumption, power, and efficiency) now show a more centered distribution, suggesting a significant reduction in skewness.
+
+Clarity: The histograms exhibit less spreading after the log transformation, offering clearer insights into the central tendencies of the features.
+
+Retention of Patterns: Even after the log transformation, the underlying data patterns and structures largely remain intact.
+
+Improved Interpretability: Through the log transformation, the scale is compressed, causing large differences in the original data to appear smaller and small differences to appear larger. This feature can aid in visualizing and interpreting data patterns, particularly when dealing with wide-ranging original scales.
+
+****
+
+#### Relation betwwen Features
+
+```{r, fig.height = 8, fig.width = 9, fig.align = 'center', fig.cap = '**Fig. 7. Correlation plots of the features. Each feature pair is plotted only once.**'}
+rename <- c("Power guess", "Ann. consumption guess", "Est. efficiency", "Hydro-only MtCO2eq", "Estimated MtCO2eq",  "Coal-only MtCO2eq", "Emission intensity", "Hash rate")
+
+selected_data <- bitcoin_mining[columns_to_plot]
+selected_data <- na.omit(selected_data)
+selected_data <- sapply(selected_data, as.numeric)
+selected_data <- as.data.frame(selected_data)
+
+scatter_plot_list <- list()
+unique_pairs <- combn(ncol(selected_data), 2)
+num_pairs <- ncol(unique_pairs)
+
+for (i in 1 : num_pairs) {
+    x_var <- unique_pairs[1, i]
+    y_var <- unique_pairs[2, i]
+    
+    scatter_plot <- ggally_points(
+        data = selected_data,  
+        mapping = aes_string(
+            x = colnames(selected_data)[x_var],
+            y = colnames(selected_data)[y_var]),
+        color = "blue", size = 1, pch = 21) +
+        geom_point(color = "blue", size = 0.5) +
+        labs(x = rename[x_var], y = rename[y_var]) +
+        
+        theme(axis.text.x = element_text(size = 7), 
+              axis.text.y = element_text(size = 7),
+              axis.title.x = element_text(size = 7), 
+              axis.title.y = element_text(size = 7))
+    
+    scatter_plot_list[[i]] <- scatter_plot
+}
+
+grid.arrange(grobs = scatter_plot_list, ncol = 4, width = 6 * 4, heights = rep(3, ceiling(num_pairs / 4)))
+```
+
+
+#### Correlation Matrix:
+
+A correlation matrix is a table showing correlation coefficients between sets of variables. Each random variable (Xi) in the table is correlated with each of the other values in the table (Xj). This allows you to see which pairs have the highest correlation.
+
+
+```{r, fig.align = 'center', fig.cap = '**Fig. 8. Correlation matrix of the features. Correlation of 1 suggests perfect linear correlation between the feature pair.**'}
+correlation_matrix <- cor(selected_data, use = "complete.obs")
+
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF",
+                          "#77AADD", "#4477AA"))
+
+names <- c("Power guess", "Ann. consumption guess", "Estimated efficiency", "Hydro-only MtCO2eq", "Estimated MtCO2eq", "Coal-only MtCO2eq", "Emission intensity", "Hash rate")
+
+colnames(correlation_matrix) <- names
+rownames(correlation_matrix) <- names
+
+corrplot(correlation_matrix,  # Replace with your correlation matrix
+          method = "color",  # Use color to represent correlations
+          col = col(200),  # Color palette
+          type = "full",  # Display the upper triangle of the matrix
+          order = "hclust",  # Order variables using hierarchical clustering
+          addCoef.col = "black",  # Color of correlation coefficient labels
+          tl.col = "black",  # Text label color
+          tl.srt = 90,  # Text label rotation angle
+          tl.cex = 0.8,
+          sig.level = 0.01,  # Significance level
+          insig = "blank",  # Display "blank" for insignificant correlations
+          # Hide correlation coefficient on the principal diagonal
+          diag = TRUE
+)
+```
+
+****
+Fig 8. shows the correlation  matrix for the features. The correlation is based on the Pearson correlation method and the values range from -1 to 1, with -1 indicating a perfect negative correlation, 1 indicating a perfect positive correlation, and 0 indicating no correlation.
+
+Highly Correlated Variables: 'power Guess', 'annualized consumption guess', 'Estimated MtCO2e', 'Coal only MtCO2e', and 'Hash rate' exhibit strong positive correlations with each other. This implies that as one of these variables increases, the others also tend to increase. This observation suggests a direct relationship between the rise in estimated power consumption in bitcoin mining, the associated carbon emissions, and the hash rate (a measure of mining computational power). 
+
+Emission Intensities: Emission intensity does not exhibit strong correlations with most of the other variables. This observation may indicate that the emission intensity (emissions per unit of energy) remains relatively constant, regardless of fluctuations in other aspects of the network.
+
+Efficiency: The Estimated efficiency variable demonstrates weak correlations with most of the other variables. This suggests that the efficiency of mining hardware (in terms of energy consumed per transaction) may not be a dominant factor influencing the overall energy consumption and emissions of the bitcoin network. However, it is worth noting that efficiency has not experienced significant improvements or deteriorations over time.
+
+Hydro vs Coal Emissions: Hydro only MtCO2e shows weak correlations with the other variables, implying that emissions from hydroelectric sources do not significantly contribute to the overall carbon footprint of bitcoin mining. On the other hand, Coal only MtCO2e exhibits a high correlation with the overall estimated emissions (Estimated MtCO2e), indicating that coal-based power sources may be a substantial contributor to bitcoin's carbon footprint.
+
+****
+
+#### Spatial Analysis
+
+In data analysis, spatial analysis is a crucial component that focuses on examining and interpreting data in the context of geographic or spatial locations. It involves the use of various techniques and methods to analyze and visualize data that has a spatial component, such as geographic coordinates, addresses, or regions. The average monthly absolute hash rate world map has been shown in Fig. 9.  
+
+
+```{r, include = FALSE, echo = FALSE}
+data <- read.csv("https://raw.githubusercontent.com/tushar2016sharma/Bitcoin_mining/main/regional_data.csv")
+
+world <- st_read("https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json")
+
+mismatched_countries <- setdiff(data$country, world$name)
+
+data$country[data$country == "Mainland China"] <- "China"
+data$country[data$country == "Russian Federation"] <- "Russia"
+data$country[data$country == "United States"] <- "United States of America"
+data$country[data$country == "Iran, Islamic Rep."] <- "Iran"
+data$country[data$country == "Germany *"] <- "Germany"
+data$country[data$country == "Ireland *"] <- "Ireland"
+data <- data[data$country != "Other", ]
+world_df <- as.data.frame(world)
+
+data_agg <- data %>%
+    group_by(country) %>%
+    select(country, monthly_absolute_hashrate_EH.S) %>%
+    distinct() %>%
+    as.data.frame()
+
+merged_data <- left_join(world_df, data_agg, by = c("name" = "country"))
+merged_sf_original <- st_as_sf(merged_data)
+```
+
+```{r, fig.height = 9, fig.width = 8, fig.align = 'center', fig.cap = '**Fig. 9. Map showing the Bitcoin mining activity worldwide based on the Average monthly absolute hashrate.**'}
+
+ggplot(data = merged_sf_original) +
+    geom_sf(aes(fill = monthly_absolute_hashrate_EH.S), color = "white", size = 0.2) +
+    scale_fill_gradient(low = "lightblue", high = "darkblue", 
+                        na.value = "grey50", guide = "colorbar", 
+                        name = "Monthly Absolute Hashrate (EH/s)",
+                        limit = c(0, 100)) +
+    labs(title="Average monthly absolute hashrate by country from Sep 2019 to Jan 2022") +
+    theme_minimal()
+```
+
+****
+
+This presents a choropleth map illustrating the monthly absolute hashrate for various countries. The map reveals that the global distribution of hashrate is not uniform; instead, it is concentrated in specific regions or countries due to factors such as technology infrastructure, regulations, or energy costs. The color gradient on the map spans from light blue (indicating lower values) to dark blue (indicating higher values), representing the monthly absolute hashrate for each country. Countries with no available data (NaN values) are depicted in gray. Those shaded in dark blue are indicative of regions significantly contributing to the hashrate. Higher hashrates in certain countries may imply greater investment or infrastructure within the domain.
+
+****
+
+```{r, echo = FALSE, fig.width = 5, fig.height = 5, fig.align = 'center', fig.cap = "**Fig. 10. Monthly absolute hashrate by country from Sep 2019 to Jan 2022.**"}
+knitr::include_graphics("https://github.com/tushar2016sharma/Bitcoin_mining/blob/main/regional_abs_hashrate.jpg?raw=true")
+```
+
+****
+The monthly absolute hash rate with time for different countries has ben shown in Fig. 10. In January 2022, the highest monthly hash rate contribution comes from the United States, followed by China. With the exception of the United States and China, most countries maintain a monthly hash rate contribution of 15% or lower. This fact underscores the regional disparities in mining activity, with the top contributors being the mentioned countries.
+
+****
+
+## Conclusions
+
+****
+
+The data projects comprehensive picture of Bitcoin mining's trajectory, highlighting its growing prominence and the subsequent challenges it presents. It clearly demonstrates the surge in power consumption and annualized consumption, underscoring the rising energy demands associated with Bitcoin's increasing acceptance and popularity. Many variables are perfectly correlated with each other. The carbon dioxide emission seems to be strongly correlated with most factors in the data. The dominant contributions of certain regions, particularly the United States and China, in the mining landscape hint at regional disparities, possibly driven by technology infrastructure, regulatory environments, and energy economics. These countries show the highest Bitcoin mining activity as indicated by the monthly hash rate values. 
+
+****
+
+
+## References
+
+1) Stoll, Christian., Klaassen, Lena., & Gallersdorfer, Ulrich. (2018, Dec). The Carbon Footprint of Bitcoin. MIT CEEPR Working Paper Series by Massachusetts Institute of Technology. https://ceepr.mit.edu/wp-content/uploads/2021/09/2018-018.pdf
+
+2) Krause, M. J., & Tolaymat, T. (2018). Quantification of energy and carbon costs for mining cryptocurrencies. Nature Sustainability, 1(11), 711–718. https://doi-org.proxygw.wrlc.org/10.1038/s41893-018-0152-7
+
+3) Cambridge Bitcoin Electricity Consumption Index 2023. https://ccaf.io/cbnsi/cbeci
+
+4) Bitcoin Network Hash Rate, NASDAQ 2023. https://data.nasdaq.com/data/BCHAIN/HRATE-bitcoin-hash-rate
+
+5) Calvo-Pardo, H. F., Mancini, T., & Olmo, J. (2022). Machine Learning the Carbon Footprint of Bitcoin Mining. Journal of Risk and Financial Management, 15(2), 71. https://doi.org/10.3390/jrfm15020071
+
+<br>
