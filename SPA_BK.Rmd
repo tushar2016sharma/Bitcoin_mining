@@ -1,0 +1,78 @@
+---
+title: "DS_EDA PJT1-SPA"
+author: "Brian Kim"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+  code_folding: hide
+number_sections: false
+toc: yes
+toc_depth: 3
+toc_float: yes
+pdf_document:
+  toc: yes
+---
+  
+```{r init, include=F}
+# The package "ezids" (EZ Intro to Data Science) includes some helper functions we developed for the course. 
+# Some of the frequently used functions are loadPkg(), xkabledply(), xkablesummary(), uzscale(), etc.
+# You will need to install it (once) from GitHub.
+# library(devtools)
+# devtools::install_github("physicsland/ezids")
+# Then load the package in your R session
+```
+
+
+
+```{r}
+library(rgdal)
+library(leaflet)
+
+# Load the shapefile
+shapefile_path <- "/Users/brian/Documents/GitHub/R-EDA/Bitcoin_mining/TM_WORLD_BORDERS_SIMPL-0.3"
+world_spdf <- readOGR(dsn = shapefile_path, layer = "TM_WORLD_BORDERS_SIMPL-0.3", verbose = FALSE)
+
+# Read the Bitcoin data
+bitcoin_df <- read.csv("/Users/brian/Documents/GitHub/R-EDA/Bitcoin_mining/bitcoin_mining_regional.csv")
+
+# Merge Bitcoin data with the world_spdf based on a common identifier, e.g., ISO country code
+merged_data <- merge(world_spdf, bitcoin_df, by.x = "AREA", by.y = "area", all.x = TRUE)
+
+# Create color bins
+mybins <- c(0, 10, 20, 50, 100, 500, Inf)
+mypalette <- colorBin(palette = "YlOrBr", domain = merged_data$avg_monthly_hashrate, na.color = "transparent", bins = mybins)
+
+# Prepare the text for tooltips
+mytext <- paste(
+    "Country: ", merged_data$country, "<br/>",
+    "Area: ", merged_data$AREA, "<br/>",
+    "Bitcoin Hashrate: ", round(merged_data$avg_monthly_hashrate, 2),
+    sep = ""
+) %>%
+lapply(htmltools::HTML)
+
+# Create the Leaflet map
+leaflet(merged_data) %>% 
+  addTiles()  %>% 
+  setView(lat = 10, lng = 0, zoom = 2) %>%
+  addPolygons( 
+    fillColor = ~mypalette(merged_data$avg_monthly_hashrate),
+    stroke = TRUE,
+    fillOpacity = 0.9,
+    color = "white",
+    weight = 0.3,
+    label = mytext,
+    labelOptions = labelOptions( 
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "13px",
+      direction = "auto"
+    )
+  ) %>%
+  addLegend(pal = mypalette, values = ~merged_data$avg_monthly_hashrate, opacity = 0.9, title = "Bitcoin Hashrate", position = "bottomleft")
+
+
+
+
+
+
+```
