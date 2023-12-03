@@ -1,0 +1,463 @@
+---
+title: "Predicting Bitcoin price and volume by hashrate changes" 
+author: "Brian Kim"
+output: html_document
+---
+
+```{=html}
+<style>
+body {
+text-align: justify}
+</style>
+```
+```{r setup, include = FALSE, out.width = "100%", out.height = "100%"}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(ezids)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(ggfortify)  # for plot_acf
+library(tidyverse)
+library(lubridate)
+library(fpp2)
+library(astsa)
+library(cowplot)
+#options(repos = c(CRAN = "https://cloud.r-project.org/"))
+```
+
+```{r}
+# Load data
+df <- read_csv("/Users/brian/Documents/GitHub/Bitcoin_mining_PJT2_Only_Brian/Cleaned_bitcoin_mining_price.csv")
+summary(df)
+```
+
+```{r}
+# Display the structure of your data
+str(df)
+```
+
+# Data Preprocessing
+```{r}
+# missing value check
+missing_values <- sum(is.na(df))
+missing_values_per_variable <- colSums(is.na(df))
+print(missing_values)
+print(missing_values_per_variable)
+
+# Replace missing values
+library(dplyr)
+
+# Replace missing values with the median for each variable in the dataframe df
+df_filled <- df %>%
+  mutate_all(funs(ifelse(is.na(.), median(., na.rm = TRUE), .)))
+
+
+```
+
+# Time series analys of bitcoin price
+
+```{r}
+
+#conver data format
+df$Date <- as.Date(df$Date, format = "%m/%d/%Y")
+
+# bitcoin price
+ggplotly(ggplot(df, aes(Date, BTC_Price)) + geom_line(col = 'gold1') + 
+  labs(title = 'Bitcoin Price', x = 'Year') +
+  scale_y_continuous(breaks = c(0, 5000, 10000, 15000, 25000, 35000, 45000, 55000, 65000), 
+                     labels = c('$0', '$5,000', '$10,000', '$15,000', '$25,000','$35,000','$45,000','$55,000','$65,000')))
+
+
+
+```
+
+```{r}
+# Convert date format
+df$Date <- as.Date(df$Date, format = "%m/%d/%Y")
+
+# Create Bitcoin price plot
+bitcoin_plot <- ggplot(df, aes(Date, BTC_Price)) + 
+  geom_line(col = 'gold1') + 
+  labs(title = 'Bitcoin Price', x = 'Year') +
+  scale_y_continuous(
+    name = "BTC_Price",
+    breaks = c(0, 5000, 10000, 15000, 25000, 35000, 45000, 55000, 65000), 
+    labels = c('$0', '$5,000', '$10,000', '$15,000', '$25,000','$35,000','$45,000','$55,000','$65,000')
+  )
+
+# Create Hashrate plot
+hashrate_plot <- ggplot(df, aes(Date, Hashrate)) + 
+  geom_line(col = 'blue') + 
+  labs(title = 'Hashrate', x = 'Year') +
+  scale_y_continuous(
+    name = "Hashrate",
+    sec.axis = sec_axis(trans = ~ . * 1, 
+                        breaks = c(50000, 100000, 150000),
+                        labels = c('50k', '100k', '150k'))
+  )
+
+combined_plot <- plot_grid(bitcoin_plot, hashrate_plot, align = "v", ncol = 1)
+
+# Display the combined plot
+print(combined_plot)
+
+```
+```{r}
+library(ggplot2)
+library(patchwork)
+
+# Convert date format
+df$Date <- as.Date(df$Date, format = "%m/%d/%Y")
+
+# Assuming your data frame has columns named 'Date', 'BTC_Price', 'ETH_Price', 'SP500_Price', and 'Silver_Price'
+# Adjust column names if needed
+
+line_bitcoindf <- df %>% 
+  ggplot(aes(x = Date, y = BTC_Price)) +
+    geom_line(col = "red") + 
+    labs(
+      title = "Bitcoin Close Price",
+      x = element_blank(),
+      y = element_blank()
+    ) +
+    theme_bw(base_size = 9)
+
+line_ethdf <- df %>% 
+  ggplot(aes(x = Date, y = ETH_Price)) +
+    geom_line() + 
+    labs(
+      title = "Etherium Close Price",
+      x = element_blank(),
+      y = element_blank()
+    ) +
+    theme_bw(base_size = 9)
+
+line_sp500df <- df %>% 
+  ggplot(aes(x = Date, y = SP500_Price)) +
+    geom_line(col = "orange") + 
+    labs(
+      title = "S&P500",
+      x = element_blank(),
+      y = element_blank()
+    ) +
+    theme_bw(base_size = 9)
+
+line_silverdf <- df %>% 
+  ggplot(aes(x = Date, y = Silver_Price)) +
+    geom_line(col = "darkgreen") + 
+    labs(
+      title = "Silver Close Price",
+      x = element_blank(),
+      y = element_blank()
+    ) +
+    theme_bw(base_size = 9)
+
+line_golddf <- df %>% 
+  ggplot(aes(x = Date, y = Gold_Price)) +
+    geom_line(col = "gold") + 
+    labs(
+      title = "Gold Close Price",
+      x = element_blank(),
+      y = element_blank()
+    ) +
+    theme_bw(base_size = 9)
+
+line_consdf <- df %>% 
+  ggplot(aes(x = Date, y = annualised_consumption_MAX)) +
+    geom_line(col = "red") + 
+    labs(
+      title = "Annualised_Consumption_Max",
+      x = element_blank(),
+      y = element_blank()
+    ) +
+    theme_bw(base_size = 9)
+
+# Combine plots using patchwork
+combined_plot <- line_bitcoindf + line_ethdf + line_sp500df + line_silverdf + line_golddf + line_consdf
+
+# Print or display the combined plot
+print(combined_plot)
+
+
+```
+
+
+# This analyis should be deleted
+
+```{r}
+
+# This analyis should be deleted
+
+# convert date format
+df$Date <- as.Date(df$Date, format = "%m/%d/%Y")
+
+bit_ts = df %>%
+  filter(Date > as.Date('1/1/2017')) %>%
+  arrange(Date) %>%
+  select(BTC_Price) %>%
+  as.matrix() %>%
+  ts()
+
+gglagplot(bit_ts, do.lines = F) +
+  scale_color_continuous(low = "#b37400", high = "#ffc04d", 
+                         breaks = c(1, 1600, 2500, 3500, 4500, 27500, 65000), 
+                         labels = c('2017', '2018', '2019', '2020', '2021', '2022', '2023')) + 
+  scale_y_continuous(breaks = c(0, 15000, 40000, 65000), 
+                     labels = c('$0', '$15,000', '$40,000', '$65,000')) +
+  scale_x_continuous(breaks = c(5000, 40000, 65000), 
+                     labels = c('$5,000', '$40,000', '$65,000')) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 10),
+    axis.text.x = element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    axis.title.x = element_text(size = 10),
+    axis.title.y = element_text(size = 10)
+  )
+
+```
+
+```{r}
+cut_bit_df = df %>%
+  filter(Date > as.Date('2017-01-01'))
+
+ggplotly(cut_bit_df[-1,] %>%
+  mutate(BTC_Price = diff(cut_bit_df$BTC_Price)) %>%
+  ggplot(aes(Date, BTC_Price)) + geom_line(col = '#ffa500') + 
+  labs(x = '', title = 'Bitcoin Differenced By One', y = 'Difference'))
+
+
+```
+
+# Corrleation Analysis
+
+```{r, fig.height = 12, fig.width = 12, fig.align = 'center'}
+library(corrplot)
+
+# Check the data types of each column
+column_types <- sapply(df, class)
+
+# Identify non-numeric columns
+non_numeric_columns <- names(column_types[column_types != "numeric"])
+
+# Convert non-numeric columns to numeric
+df[, non_numeric_columns] <- lapply(df[, non_numeric_columns], as.numeric)
+
+# corrleation matrix
+correlation_matrix <- cor(df, use = "complete.obs")
+
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF",
+                          "#77AADD", "#4477AA"))
+
+corrplot(correlation_matrix,  # Replace with your correlation matrix
+          method = "color",  # Use color to represent correlations
+          col = col(200),  # Color palette
+          type = "full",  # Display the upper triangle of the matrix
+          order = "hclust",  # Order variables using hierarchical clustering
+          addCoef.col = "black",  # Color of correlation coefficient labels
+          tl.col = "black",  # Text label color
+          tl.srt = 90,  # Text label rotation angle
+          tl.cex = 0.8,
+          sig.level = 0.01,  # Significance level
+          insig = "blank",  # Display "blank" for insignificant correlations
+          # Hide correlation coefficient on the principal diagonal
+          diag = TRUE
+)
+```
+
+# Linear regression model for bitcoin price
+
+```{r}
+# Load required libraries
+library(tidyverse)
+
+# Convert date format
+df_filled$Date <- as.Date(df_filled$Date, format = "%m/%d/%Y")
+
+# Feature engineering
+df_filled$Year <- as.numeric(format(df_filled$Date, "%Y"))
+df_filled$Month <- as.numeric(format(df_filled$Date, "%m"))
+df_filled$Day <- as.numeric(format(df_filled$Date, "%d"))
+
+# Impute missing values in Silver_Price with the mean
+df_filled$Silver_Price <- ifelse(is.na(df_filled$Silver_Price), mean(df_filled$Silver_Price, na.rm = TRUE), df_filled$Silver_Price)
+
+# Define predictor variables
+predictors <- c("annualised_consumption_MAX", "Silver_Price", "SP500_Price", "ETH_Price", "Hashrate")
+
+# Impute missing values in the test set with means
+df_test_filled <- df_filled
+df_test_filled$Silver_Price <- ifelse(is.na(df_test_filled$Silver_Price), mean(df_test_filled$Silver_Price, na.rm = TRUE), df_test_filled$Silver_Price)
+
+# Train a predictive model (linear regression for simplicity)
+model <- lm(BTC_Price ~ ., data = df_test_filled[, c(predictors, "BTC_Price")])
+
+# Make predictions on the test set
+predictions <- predict(model, newdata = df_test_filled)
+
+# Visualize predictions vs. actual prices
+plot(df_test_filled$Date, df_test_filled$BTC_Price, col = "blue", type = "l", lty = 1, xlab = "Date", ylab = "BTC_Price")
+lines(df_test_filled$Date, predictions, col = "red", type = "l", lty = 2)
+legend("topright", legend = c("Actual", "Predicted"), col = c("blue", "red"), lty = 1:2)
+
+# Evaluate the model
+rmse <- sqrt(mean((predictions - df_test_filled$BTC_Price)^2))
+cat("Root Mean Squared Error (RMSE) for BTC_Price:", rmse, "\n")
+
+```
+```{r}
+# Load required libraries
+library(tidyverse)
+library(randomForest)
+
+# Assuming df_filled is your original dataset
+
+# Convert date format
+df_filled$Date <- as.Date(df_filled$Date, format = "%m/%d/%Y")
+
+# Feature engineering
+df_filled$Year <- as.numeric(format(df_filled$Date, "%Y"))
+df_filled$Month <- as.numeric(format(df_filled$Date, "%m"))
+df_filled$Day <- as.numeric(format(df_filled$Date, "%d"))
+
+# Impute missing values in Silver_Price with the mean
+df_filled$Silver_Price <- ifelse(is.na(df_filled$Silver_Price), mean(df_filled$Silver_Price, na.rm = TRUE), df_filled$Silver_Price)
+
+# Define predictor variables
+predictors <- c("annualised_consumption_MAX", "Silver_Price", "SP500_Price", "ETH_Price", "Hashrate")
+
+# Impute missing values in the test set with means
+df_test_filled <- df_filled
+df_test_filled$Silver_Price <- ifelse(is.na(df_test_filled$Silver_Price), mean(df_test_filled$Silver_Price, na.rm = TRUE), df_test_filled$Silver_Price)
+
+# Train a Random Forest model
+set.seed(123)  # Set a seed for reproducibility
+model_rf <- randomForest(BTC_Price ~ ., data = df_test_filled[, c(predictors, "BTC_Price")])
+
+# Make predictions on the test set
+predictions_rf <- predict(model_rf, newdata = df_test_filled)
+
+# Visualize predictions vs. actual prices
+plot(df_test_filled$Date, df_test_filled$BTC_Price, col = "blue", type = "l", lty = 1, xlab = "Date", ylab = "BTC_Price")
+lines(df_test_filled$Date, predictions_rf, col = "green", type = "l", lty = 2)
+legend("topright", legend = c("Actual", "RF Predicted"), col = c("blue", "green"), lty = 1:2)
+
+# Evaluate the Random Forest model
+rmse_rf <- sqrt(mean((predictions_rf - df_test_filled$BTC_Price)^2))
+cat("Root Mean Squared Error (RMSE) for BTC_Price (Random Forest):", rmse_rf, "\n")
+
+
+```
+
+
+# RandomForest model for predicting bitcoin price
+
+```{r}
+# Load required libraries
+library(tidyverse)
+library(randomForest)
+
+# Ensure df_filled is loaded with the required data
+
+# Convert date format
+df_filled$Date <- as.Date(df_filled$Date, format = "%m/%d/%Y")
+
+# Feature engineering
+df_filled$Year <- as.numeric(format(df_filled$Date, "%Y"))
+df_filled$Month <- as.numeric(format(df_filled$Date, "%m"))
+df_filled$Day <- as.numeric(format(df_filled$Date, "%d"))
+
+# Impute missing values using means from the training set
+mean_Silver_Price <- mean(df_filled$Silver_Price, na.rm = TRUE)
+df_filled$Silver_Price <- ifelse(is.na(df_filled$Silver_Price), mean_Silver_Price, df_filled$Silver_Price)
+
+# Split the data into training and test sets
+set.seed(123)  # Set seed for reproducibility
+train_indices <- sample(1:nrow(df_filled), 0.8 * nrow(df_filled))
+df_train <- df_filled[train_indices, ]
+df_test <- df_filled[-train_indices, ]
+
+# Define predictor variables
+predictors <- c("annualised_consumption_MAX", "Silver_Price", "SP500_Price", "ETH_Price", "Hashrate")
+
+# Train a random forest model
+rf_model <- randomForest(
+  BTC_Price ~ .,
+  data = df_train[, c(predictors, "BTC_Price")],
+  ntree = 500,  # You can adjust the number of trees
+  mtry = sqrt(length(predictors)),  # Use the square root of the number of predictors
+  importance = TRUE
+)
+
+# Make predictions on the test set
+rf_predictions <- predict(rf_model, newdata = df_test[, c(predictors, "BTC_Price")])
+
+# Visualize predictions vs. actual prices
+plot(df_test$Date, df_test$BTC_Price, col = "blue", type = "l", lty = 1, xlab = "Date", ylab = "BTC_Price")
+lines(df_test$Date, rf_predictions, col = "red", type = "l", lty = 2)
+legend("topright", legend = c("Actual", "Predicted"), col = c("blue", "red"), lty = 1:2)
+
+# Evaluate the random forest model
+rmse_rf <- sqrt(mean((rf_predictions - df_test$BTC_Price)^2))
+cat("Root Mean Squared Error (RMSE) for BTC_Price with Random Forest:", rmse_rf, "\n")
+
+# Feature importance
+varImpPlot(rf_model)
+
+
+```
+
+
+# XGBoost model for predicting bitcoin price
+
+```{r}
+# Load required libraries
+library(tidyverse)
+library(xgboost)
+
+# Ensure df_filled is loaded with the required data
+
+# Convert date format
+df_filled$Date <- as.Date(df_filled$Date, format = "%m/%d/%Y")
+
+# Feature engineering
+df_filled$Year <- as.numeric(format(df_filled$Date, "%Y"))
+df_filled$Month <- as.numeric(format(df_filled$Date, "%m"))
+df_filled$Day <- as.numeric(format(df_filled$Date, "%d"))
+
+# Impute missing values using means from the training set
+mean_Silver_Price <- mean(df_filled$Silver_Price, na.rm = TRUE)
+df_filled$Silver_Price <- ifelse(is.na(df_filled$Silver_Price), mean_Silver_Price, df_filled$Silver_Price)
+
+# Split the data into training and test sets
+set.seed(123)  # Set seed for reproducibility
+train_indices <- sample(1:nrow(df_filled), 0.8 * nrow(df_filled))
+df_train <- df_filled[train_indices, ]
+df_test <- df_filled[-train_indices, ]
+
+# Define predictor variables
+predictors <- c("annualised_consumption_MAX", "Silver_Price", "SP500_Price", "ETH_Price", "Hashrate")
+
+# Train a predictive model (XGBoost)
+xgb_model <- xgboost(
+  data = model.matrix(BTC_Price ~ ., data = df_train[, c(predictors, "BTC_Price")]),
+  label = df_train$BTC_Price,
+  nrounds = 100,  # You can adjust the number of boosting rounds
+  objective = "reg:squarederror"
+)
+
+# Make predictions on the test set
+xgb_predictions <- predict(xgb_model, newdata = model.matrix(BTC_Price ~ ., data = df_test[, c(predictors, "BTC_Price")]))
+
+# Visualize predictions vs. actual prices
+plot(df_test$Date, df_test$BTC_Price, col = "blue", type = "l", lty = 1, xlab = "Date", ylab = "BTC_Price")
+lines(df_test$Date, xgb_predictions, col = "red", type = "l", lty = 2)
+legend("topright", legend = c("Actual", "Predicted"), col = c("blue", "red"), lty = 1:2)
+
+# Evaluate the XGBoost model
+rmse_xgb <- sqrt(mean((xgb_predictions - df_test$BTC_Price)^2))
+cat("Root Mean Squared Error (RMSE) for BTC_Price with XGBoost:", rmse_xgb, "\n")
+
+
+```
