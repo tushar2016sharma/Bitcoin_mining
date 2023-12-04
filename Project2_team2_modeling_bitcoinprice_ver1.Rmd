@@ -1,0 +1,380 @@
+---
+title: "Predicting Bitcoin price and volume by hashrate changes" 
+author: "Brian Kim"
+output: html_document
+---
+
+```{=html}
+<style>
+body {
+text-align: justify}
+</style>
+```
+```{r setup, include = FALSE, out.width = "100%", out.height = "100%"}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(ezids)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(ggfortify)  # for plot_acf
+library(tidyverse)
+library(lubridate)
+library(fpp2)
+library(astsa)
+library(cowplot)
+#options(repos = c(CRAN = "https://cloud.r-project.org/"))
+```
+
+```{r}
+# Load data
+df <- read_csv("/Users/brian/Documents/GitHub/Bitcoin_mining_PJT2_Only_Brian/Cleaned_bitcoin_mining_price.csv")
+summary(df)
+```
+
+```{r}
+# Display the structure of your data
+str(df)
+```
+
+# Data Preprocessing
+```{r}
+# missing value check
+missing_values <- sum(is.na(df))
+missing_values_per_variable <- colSums(is.na(df))
+print(missing_values)
+print(missing_values_per_variable)
+
+# Replace missing values
+library(dplyr)
+
+# Replace missing values with the median for each variable in the dataframe df
+df_filled <- df %>%
+  mutate_all(funs(ifelse(is.na(.), median(., na.rm = TRUE), .)))
+
+
+```
+
+# Time series analys of bitcoin price
+
+```{r}
+
+#conver data format
+df$Date <- as.Date(df$Date, format = "%m/%d/%Y")
+
+# bitcoin price
+ggplotly(ggplot(df, aes(Date, BTC_Price)) + geom_line(col = 'gold1') + 
+  labs(title = 'Bitcoin Price', x = 'Year') +
+  scale_y_continuous(breaks = c(0, 5000, 10000, 15000, 25000, 35000, 45000, 55000, 65000), 
+                     labels = c('$0', '$5,000', '$10,000', '$15,000', '$25,000','$35,000','$45,000','$55,000','$65,000')))
+
+
+
+```
+
+```{r}
+# Convert date format
+df$Date <- as.Date(df$Date, format = "%m/%d/%Y")
+
+# Create Bitcoin price plot
+bitcoin_plot <- ggplot(df, aes(Date, BTC_Price)) + 
+  geom_line(col = 'gold1') + 
+  labs(title = 'Bitcoin Price', x = 'Year') +
+  scale_y_continuous(
+    name = "BTC_Price",
+    breaks = c(0, 5000, 10000, 15000, 25000, 35000, 45000, 55000, 65000), 
+    labels = c('$0', '$5,000', '$10,000', '$15,000', '$25,000','$35,000','$45,000','$55,000','$65,000')
+  )
+
+# Create Hashrate plot
+hashrate_plot <- ggplot(df, aes(Date, Hashrate)) + 
+  geom_line(col = 'blue') + 
+  labs(title = 'Hashrate', x = 'Year') +
+  scale_y_continuous(
+    name = "Hashrate",
+    sec.axis = sec_axis(trans = ~ . * 1, 
+                        breaks = c(50000, 100000, 150000),
+                        labels = c('50k', '100k', '150k'))
+  )
+
+combined_plot <- plot_grid(bitcoin_plot, hashrate_plot, align = "v", ncol = 1)
+
+# Display the combined plot
+print(combined_plot)
+
+```
+
+# This analyis should be deleted
+
+```{r}
+
+# This analyis should be deleted
+
+# convert date format
+df$Date <- as.Date(df$Date, format = "%m/%d/%Y")
+
+bit_ts = df %>%
+  filter(Date > as.Date('1/1/2017')) %>%
+  arrange(Date) %>%
+  select(BTC_Price) %>%
+  as.matrix() %>%
+  ts()
+
+gglagplot(bit_ts, do.lines = F) +
+  scale_color_continuous(low = "#b37400", high = "#ffc04d", 
+                         breaks = c(1, 1600, 2500, 3500, 4500, 27500, 65000), 
+                         labels = c('2017', '2018', '2019', '2020', '2021', '2022', '2023')) + 
+  scale_y_continuous(breaks = c(0, 15000, 40000, 65000), 
+                     labels = c('$0', '$15,000', '$40,000', '$65,000')) +
+  scale_x_continuous(breaks = c(5000, 40000, 65000), 
+                     labels = c('$5,000', '$40,000', '$65,000')) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 10),
+    axis.text.x = element_text(size = 6),
+    axis.text.y = element_text(size = 6),
+    axis.title.x = element_text(size = 10),
+    axis.title.y = element_text(size = 10)
+  )
+
+```
+
+```{r}
+cut_bit_df = df %>%
+  filter(Date > as.Date('2017-01-01'))
+
+ggplotly(cut_bit_df[-1,] %>%
+  mutate(BTC_Price = diff(cut_bit_df$BTC_Price)) %>%
+  ggplot(aes(Date, BTC_Price)) + geom_line(col = '#ffa500') + 
+  labs(x = '', title = 'Bitcoin Differenced By One', y = 'Difference'))
+
+
+```
+
+# Corrleation Analysis
+
+```{r, fig.height = 12, fig.width = 12, fig.align = 'center'}
+library(corrplot)
+
+# Check the data types of each column
+column_types <- sapply(df, class)
+
+# Identify non-numeric columns
+non_numeric_columns <- names(column_types[column_types != "numeric"])
+
+# Convert non-numeric columns to numeric
+df[, non_numeric_columns] <- lapply(df[, non_numeric_columns], as.numeric)
+
+# corrleation matrix
+correlation_matrix <- cor(df, use = "complete.obs")
+
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF",
+                          "#77AADD", "#4477AA"))
+
+corrplot(correlation_matrix,  # Replace with your correlation matrix
+          method = "color",  # Use color to represent correlations
+          col = col(200),  # Color palette
+          type = "full",  # Display the upper triangle of the matrix
+          order = "hclust",  # Order variables using hierarchical clustering
+          addCoef.col = "black",  # Color of correlation coefficient labels
+          tl.col = "black",  # Text label color
+          tl.srt = 90,  # Text label rotation angle
+          tl.cex = 0.8,
+          sig.level = 0.01,  # Significance level
+          insig = "blank",  # Display "blank" for insignificant correlations
+          # Hide correlation coefficient on the principal diagonal
+          diag = TRUE
+)
+```
+
+# Linear regression model for bitcoin price by hashrate changes
+
+```{r}
+# Load required libraries
+library(tidyverse)
+library(caret)
+
+# Convert date format
+df_filled$Date <- as.Date(df$Date, format = "%m/%d/%Y")
+
+# Feature engineering
+df_filled$Year <- as.numeric(format(df_filled$Date, "%Y"))
+df_filled$Month <- as.numeric(format(df_filled$Date, "%m"))
+df_filled$Day <- as.numeric(format(df_filled$Date, "%d"))
+
+# Split data into training and testing sets
+# set.seed(123)
+# train_index <- createDataPartition(df$Price, p = 0.8, list = FALSE)
+# train_data <- df[train_index, ]
+# test_data <- df[-train_index, ]
+
+# Define predictor variables
+predictors <- c("Year", "Month", "Day", "Hashrate")
+
+# Train a predictive model (linear regression for simplicity)
+model <- lm(BTC_Price ~ ., data = train_data[, c(predictors, "BTC_Price")])
+
+# Make predictions on the test set
+predictions <- predict(model, newdata = test_data)
+
+# Visualize predictions vs. actual prices
+plot(test_data$Date, test_data$BTC_Price, col = "blue", type = "l", lty = 1, xlab = "Date", ylab = "BTC_Price")
+lines(test_data$Date, predictions, col = "red", type = "l", lty = 2)
+legend("topright", legend = c("Actual", "Predicted"), col = c("blue", "red"), lty = 1:2)
+
+
+# Evaluate the model
+rmse <- sqrt(mean((predictions - test_data$Price)^2))
+cat("Root Mean Squared Error(RMSE) for BTC_Price:", rmse, "\n")
+
+```
+
+# Linear regression model for bitcoin volume by hashrate changes
+
+```{r}
+# Load required libraries
+library(tidyverse)
+library(caret)
+
+# Convert date format
+df_filled$Date <- as.Date(df$Date, format = "%m/%d/%Y")
+
+# Feature engineering
+df_filled$Year <- as.numeric(format(df_filled$Date, "%Y"))
+df_filled$Month <- as.numeric(format(df_filled$Date, "%m"))
+df_filled$Day <- as.numeric(format(df_filled$Date, "%d"))
+
+# Split data into training and testing sets
+# set.seed(123)
+# train_index <- createDataPartition(df$Volume, p = 0.8, list = FALSE)
+train_data <- df_filled[train_index, ]
+test_data <- df_filled[-train_index, ]
+Testnewdata <- test_data[, !(names(test_data) %in% c("BTC_Price"))]
+
+# Define predictor variables
+predictors <- c("Year", "Month", "Day", "Hashrate")
+
+# Train a predictive model (linear regression for simplicity)
+model <- lm(BTC_Volume ~ ., data = train_data[, c(predictors, "BTC_Volume")])
+
+# Make predictions on the test set
+predictions <- predict(model, newdata = test_data)
+
+# Visualize predictions vs. actual prices
+plot(test_data$Date, test_data$Volume, col = "blue", type = "l", lty = 1, xlab = "Date", ylab = "Volume")
+lines(test_data$Date, predictions, col = "red", type = "l", lty = 2)
+legend("topright", legend = c("Actual", "Predicted"), col = c("blue", "red"), lty = 1:2)
+
+# Evaluate the model
+rmse <- sqrt(mean((predictions - test_data$Volume)^2))
+cat("Root Mean Squared Error(RMSE) for BTC_Volume:", rmse, "\n")
+```
+
+# RandomForest model for predicting bitcoin price by hashrate changes
+
+```{r}
+# Load required libraries
+library(tidyverse)
+library(caret)
+library(randomForest)
+
+# Convert date format
+df_filled$Date <- as.Date(df_filled$Date, format = "%m/%d/%Y")
+
+# Feature engineering
+df_filled$Year <- as.numeric(format(df_filled$Date, "%Y"))
+df_filled$Month <- as.numeric(format(df_filled$Date, "%m"))
+df_filled$Day <- as.numeric(format(df_filled$Date, "%d"))
+
+# Split data into training and testing sets
+# set.seed(123)
+# train_index <- createDataPartition(df$Price, p = 0.8, list = FALSE). #time series split data
+train_data <- df_filled[train_index, ]
+test_data <- df_filled[-train_index, ]
+Testnewdata <- test_data[, !(names(test_data) %in% c("BTC_Price"))]
+
+# Define predictor variables
+predictors <- c("Silver_Price", "SP500_Price", "ETH_Price", "Hashrate")
+
+# Train a model for predicting volume (using Random Forest for simplicity)
+Price_model <- randomForest(BTC_Price ~ ., data = train_data[, c(predictors, "BTC_Price")])
+
+# Make predictions on the test set for volume
+price_predictions <- predict(Price_model, newdata = Testnewdata)
+
+# Visualize predictions vs. actual volume
+plot(Testnewdata$Date, Testnewdata$BTC_Price, col = "blue", type = "l", lty = 1, xlab = "Date", ylab = "BTC_Price")
+lines(Testnewdata$Date, price_predictions, col = "red", type = "l", lty = 2)
+legend("topright", legend = c("Actual", "Predicted"), col = c("blue", "red"), lty = 1:2)
+
+# Combine dates and predicted prices into a data frame
+predicted_data <- data.frame(
+  Date = Testnewdata$Date,
+  Predicted_Price = price_predictions
+)
+
+# Print the predicted data
+print(predicted_data)
+
+# Evaluate the volume model
+rmse_price <- sqrt(mean((price_predictions - Testnewdata$BTC_Price)^2))
+cat("Root Mean Squared Error(RMSE) for BTC_Price:", rmse_price, "\n")
+
+print(train_data[, c(predictors, "BTC_Price")])
+print(colnames(Testnewdata))
+```
+
+# RandomForest model for predicting bitcoin volume by hashrate changes
+
+```{r}
+# Load required libraries
+library(tidyverse)
+library(caret)
+library(randomForest)
+
+# Convert date format
+df_filled$Date <- as.Date(df_filled$Date, format = "%m/%d/%Y")
+
+# Feature engineering
+df_filled$Year <- as.numeric(format(df_filled$Date, "%Y"))
+df_filled$Month <- as.numeric(format(df_filled$Date, "%m"))
+df_filled$Day <- as.numeric(format(df_filled$Date, "%d"))
+
+# Split data into training and testing sets
+# set.seed(123)
+# train_index <- createDataPartition(df$Price, p = 0.8, list = FALSE)
+train_data <- df_filled[train_index, ]
+test_data <- df_filled[-train_index, ]
+Testnewdata <- test_data[, !(names(test_data) %in% c("BTC_Volume"))]
+
+# Define predictor variables
+predictors <- c("Silver_Price", "SP500_Price", "ETH_Price", "Hashrate")
+
+# Train a model for predicting volume (using Random Forest for simplicity)
+volume_model <- randomForest(BTC_Volume ~ ., data = train_data[, c(predictors, "BTC_Volume")])
+
+# Make predictions on the test set for volume
+volume_predictions <- predict(volume_model, newdata = Testnewdata)
+
+# Visualize predictions vs. actual volume
+plot(Testnewdata$Date, Testnewdata$BTC_Volume, col = "blue", type = "l", lty = 1, xlab = "Year", ylab = "BTC_Volume")
+lines(Testnewdata$Date, volume_predictions, col = "red", type = "l", lty = 2)
+legend("topright", legend = c("Actual", "Predicted"), col = c("blue", "red"), lty = 1:2)
+
+# Combine dates and predicted prices into a data frame
+predicted_data <- data.frame(
+  Date = test_data$Date,
+  Predicted_Volume = volume_predictions
+)
+
+# Print the predicted data
+print(predicted_data)
+
+# Evaluate the volume model
+rmse_volume <- sqrt(mean((volume_predictions - Testnewdata$Volume)^2))
+cat("Root Mean Squared Error(RMSE) for Volume:", rmse_volume, "\n")
+
+print(train_data[, c(predictors, "BTC_Volume")])
+print(colnames(Testnewdata))
+
+```
