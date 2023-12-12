@@ -1,0 +1,1097 @@
+---
+title: "Environmental Impacts of Bitcoin Mining"
+author: "Tushar Sharma, Kusum Sai Chowdary, Brian Kim"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+```
+
+**Abstract-** This research project comprehensively analyzes the environmental consequences of Bitcoin mining through traditional machine learning approach. The study focuses on two primary objectives which are referred to as SMART (Specific Measurable Attainable Relevant and Timely) questions: 1)  Based on the historical market conditions and other important predictors, we will predict the Bitcoin price and the transaction volume. 2) We will predict the carbon dioxide emission which will provide insights about the carbon footprint of Bitcoin mining.
+
+```{r}
+library(caret)
+library(zoo)
+library(ggplot2)
+library(corrplot)
+library(tidyverse)
+library(gridExtra)
+library(randomForest)
+library(xgboost)
+```
+
+```{r}
+#bitcoin_data <- read.csv("/Users/kusumsaichowdary/Downloads/bitcoin_mining.csv")
+bitcoin_data <- read.csv("C:\\Users\\tusha\\Downloads\\bitcoin_mining.csv")
+```
+
+```{r}
+# Create a vector with names for all columns
+new_column_names <- c("Date.and.Time",
+  "power_max", "power_min", "power_guess",
+  "ann_consumption_max", "ann_consumption_min", "ann_consumption_guess",
+  "LB_efficiency", "Est_efficiency", "UB_efficiency",
+  "Hydro_MtCO2e", "Est_MtCO2e", "Coal_MtCO2e", "CO2_emission",
+  "Hash_rate", "Price", "Volume"
+)
+
+# Rename the columns
+colnames(bitcoin_data) <- new_column_names
+```
+
+## Introduction
+
+
+## Methodology
+
+
+#### A. Bitcoin price and CO2 emissions
+
+#### B. Stationarity 
+
+#### C. Time series cross validation 
+
+```{r, fig.height = 8, fig.width = 6, fig.align = 'center', fig.cap = '**Fig. 3. Time series cross validation folds for Bitcoin price.**'}
+
+bitcoin_data$Date.and.Time <- as.Date(bitcoin_data$Date.and.Time)
+
+# Sort data by 'Date.and.Time'
+bitcoin_data <- bitcoin_data[order(bitcoin_data$Date.and.Time), ]
+
+# Function to plot training and test sets
+plot_train_test <- function(train_data, test_data, title) {
+  ggplot() +
+    geom_line(data = train_data, aes(x = Date.and.Time, y = Price), color = "blue", size = 1) +
+    geom_line(data = test_data, aes(x = Date.and.Time, y = Price), color = "red", size = 1) +
+    labs(title = title, x = "Date", y = "Price") +
+    theme_minimal()
+}
+
+# Manual time series cross-validation
+fold_size <- 363
+training_size <- 3000
+num_folds <- floor((nrow(bitcoin_data) - training_size) / fold_size) # better to have floor division
+
+# Generate subplots for each fold
+plots <- lapply(1 : num_folds, function(i) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+
+  train_data <- bitcoin_data[1 : (start_idx + training_size - 1), ]  # Update training set
+  test_data <- bitcoin_data[(start_idx + training_size) : end_idx, ]
+
+  title <- paste("Fold", i)
+  plot_train_test(train_data, test_data, title) +
+    xlim(range(bitcoin_data$Date.and.Time))  # Set x-axis limit for the entire date range
+}) 
+
+# Combine plots into a single facet_wrap
+
+multiplot <- do.call(grid.arrange, c(plots, ncol = 1))
+
+# Apply theme settings
+multiplot <- multiplot +
+  theme(
+    axis.text = element_text(size = 14, face = 'bold'),      
+    axis.title = element_text(size = 14, face = 'bold'),     
+    plot.title = element_text(size = 14, face = 'bold'),
+    legend.text = element_text(size = 12),               
+    legend.title = element_text(size = 12)
+  )
+```
+
+## Results
+
+#### A. Bitcoin price prediction
+
+```{r}
+
+# Function to calculate MAPE, MSPE, and AIC
+calculate_errors <- function(actual, predicted, model) {
+  # Exclude rows with missing values
+  valid_rows <- complete.cases(actual, predicted)
+  actual <- actual[valid_rows]
+  predicted <- predicted[valid_rows]
+
+  # Calculate MAPE and MSPE
+  mape <- mean(abs((actual - predicted) / actual)) * 100
+  mspe <- mean(((actual - predicted) / actual)^2) * 100
+
+  # Calculate AIC
+  residuals <- actual - predicted
+  n <- length(actual)
+  k <- length(model$coef) - 1  # Number of coefficients, excluding intercept
+  aic <- n * log(sum(residuals^2) / n) + 2 * k
+
+  errors <- data.frame(
+    MAPE = mape,
+    MSPE = mspe,
+    AIC = aic
+  )
+  return(errors)
+}
+
+# Function to perform random forest regression and calculate errors
+perform_rf <- function(train_data, test_data) {
+  # Input features
+  train_feat <- c("power_max","Hash_rate", "Volume")
+  
+  # Train random forest model
+  rf_model <- randomForest(Price ~ ., data = train_data[, c(train_feat, "Price")])
+  
+  # Predict on test data
+  test_data$predicted <- predict(rf_model, newdata = test_data)
+  
+  # Calculate MAPE, MSPE, and AIC
+  errors <- calculate_errors(test_data$Price, test_data$predicted, rf_model)
+  
+  return(list(
+    predictions = data.frame(
+      Date.and.Time = test_data$Date.and.Time,
+      Actual = test_data$Price,
+      Predicted = test_data$predicted
+    ),
+    errors = errors,
+    model = rf_model
+  ))
+}
+
+# List to store actual vs predicted results and errors for each fold
+rf_results_list <- list()
+
+# Manual time series cross-validation
+for (i in 1 : num_folds) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+  
+  # Split data into training and testing sets
+  train_data <- bitcoin_data[1:(start_idx + training_size - 1), ]
+  test_data <- bitcoin_data[(start_idx + training_size) : end_idx, ]
+  
+  # Perform random forest regression
+  results <- perform_rf(train_data, test_data)
+  
+  # Store results in the list
+  rf_results_list[[paste("Fold", i)]] <- results
+}
+
+# Calculate averages of MAPE, MSPE, and AIC across all folds
+average_errors <- calculate_errors(
+  actual = do.call(rbind, lapply(rf_results_list, function(x) x$predictions$Actual)),
+  predicted = do.call(rbind, lapply(rf_results_list, function(x) x$predictions$Predicted)),
+  model = rf_results_list[[1]]$model  # Assuming all models are the same across folds
+)
+
+# Combine plots into a single time series plot
+rf_combined_plot <- ggplot() +
+  geom_line(data = do.call(rbind, lapply(seq_along(rf_results_list), function(i) {
+    results <- rf_results_list[[i]]
+    results$predictions$Fold <- paste("Fold", i)
+    return(results$predictions)
+  })),
+  aes(x = Date.and.Time, y = Actual, color = "Actual"), size = 1, linetype = "solid") +
+  geom_line(data = do.call(rbind, lapply(seq_along(rf_results_list), function(i) {
+    results <- rf_results_list[[i]]
+    results$predictions$Fold <- paste("Fold", i)
+    return(results$predictions)
+  })),
+  aes(x = Date.and.Time, y = Predicted, color = "Predicted", linetype = "solid"), size = 1) +
+  labs(title = paste("Random forest - Avg MAPE:", round(average_errors$MAPE, 2),
+                    ",", "Avg MSPE:", round(average_errors$MSPE, 2),
+                    ",", "Avg AIC:", round(average_errors$AIC, 2)),
+       x = "Date", y = "Price") +
+  theme_minimal() +
+    theme(
+      axis.text = element_text(size = 14, face = 'bold'),      
+      axis.title = element_text(size = 14, face = 'bold'),     
+      plot.title = element_text(size = 15, face = 'bold'),
+      legend.text = element_text(size = 14),               
+      legend.title = element_text(size = 14) 
+    ) +
+  scale_linetype_manual(values = rep("solid", num_folds))
+
+# Save the combined plot as an object
+rf_combined_plot <- ggplotGrob(rf_combined_plot)
+```
+
+```{r, fig.height = 4, fig.width = 10, fig.align = 'center', fig.cap = '**Fig. 5. Prediction of Bitcoin price by XGBoost regression on the 5 cross folds combined.**'}
+
+# Function to calculate MAPE, MSPE, and AIC
+calculate_errors <- function(actual, predicted, model) {
+  # Exclude rows with missing values
+  valid_rows <- complete.cases(actual, predicted)
+  actual <- actual[valid_rows]
+  predicted <- predicted[valid_rows]
+
+  # Calculate MAPE and MSPE
+  mape <- mean(abs((actual - predicted) / actual)) * 100
+  mspe <- mean(((actual - predicted) / actual)^2) * 100
+
+  # Calculate AIC
+  residuals <- actual - predicted
+  n <- length(actual)
+  k <- length(model$coef) - 1  # Number of coefficients, excluding intercept
+  aic <- n * log(sum(residuals^2) / n) + 2 * k
+
+  errors <- data.frame(
+    MAPE = mape,
+    MSPE = mspe,
+    AIC = aic
+  )
+  return(errors)
+}
+
+# Function to perform XGBoost regression and calculate errors
+perform_xgb <- function(train_data, test_data, fold_number) {
+  # Specify XGBoost parameters
+  params <- list(
+    objective = "reg:squarederror"
+  )
+  
+  # Train the XGBoost model
+  train_feat <- c("power_max","Hash_rate", "Volume")
+  
+  xgb_model <- xgboost(
+    data = as.matrix(train_data[, train_feat]),  # Exclude Date.and.Time
+    label = train_data$Price,
+    params = params,
+    nrounds = 500,
+    verbose = 0  # Suppress printing of train-rmse
+  )
+  
+  # Make predictions on the test set
+  predictions <- predict(xgb_model, as.matrix(test_data[, train_feat]))
+  
+  # Calculate MAPE, MSPE, and AIC
+  errors <- calculate_errors(test_data$Price, predictions, xgb_model)
+  
+  # Store results without printing
+  results <- data.frame(
+    Date.and.Time = test_data$Date.and.Time,
+    Actual = test_data$Price,
+    Predicted = predictions,
+    MAPE = errors$MAPE,
+    MSPE = errors$MSPE,
+    AIC = errors$AIC,  # Add AIC to the results
+    Fold = paste("Fold", fold_number)
+  )
+  return(results)
+}
+
+# List to store actual vs predicted results and errors for each fold
+xg_results_list <- list()
+
+# Manual time series cross-validation
+for (i in 1 : num_folds) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+  
+  # Split data into training and testing sets
+  train_data <- bitcoin_data[1 : (start_idx + training_size - 1), ]
+  test_data <- bitcoin_data[(start_idx + training_size) : end_idx, ]
+  
+  # Perform XGBoost regression
+  results <- perform_xgb(train_data, test_data, i)
+  
+  # Store results in the list
+  xg_results_list[[paste("Fold", i)]] <- results
+}
+
+# Combine actual and predicted values from all folds
+combined_data <- bind_rows(xg_results_list)
+
+# Calculate averages of MAPE, MSPE, and AIC across all folds
+average_errors <- calculate_errors(
+  actual = combined_data$Actual,
+  predicted = combined_data$Predicted,
+  model = xg_results_list[[1]]$model  # Assuming all models are the same across folds
+)
+
+fold_boundaries <- rep(seq(1, num_folds - 1), each = training_size - 1) * fold_size
+
+# Combine plots into a single time series plot
+xg_combined_plot <- ggplot() +
+  geom_line(data = combined_data,
+            aes(x = Date.and.Time, y = Actual, color = "Actual"), size = 1, linetype = "solid") +
+  geom_line(data = combined_data,
+            aes(x = Date.and.Time, y = Predicted, color = "Predicted", linetype = "solid"), size = 1) +
+  labs(title = paste("XGBoost - Avg MAPE:", round(average_errors$MAPE, 2),
+                    ",", "Avg MSPE:", round(average_errors$MSPE, 2),
+                    ",", "Avg AIC:", round(average_errors$AIC, 2)),
+       x = "Date", y = "Price") +
+  theme_minimal() + 
+  theme(
+    axis.text = element_text(size = 14, face = 'bold'),      
+    axis.title = element_text(size = 14, face = 'bold'),     
+    plot.title = element_text(size = 15, face = 'bold'),
+    legend.text = element_text(size = 14),               
+    legend.title = element_text(size = 14) 
+  ) +
+  scale_linetype_manual(values = rep("solid", num_folds)) 
+
+# Save the combined plot as an object
+xg_combined_plot <- ggplotGrob(xg_combined_plot)
+```
+
+```{r, fig.width = 16, fig.height = 4, fig.align = 'center', fig.cap = '**Fig 4. Prediction of Bitcoin price by Random forest (left) and XGBoost regression (right) on the 5 cross folds combined.**'}
+
+# Combine the price prediction plots side by side
+grid.arrange(rf_combined_plot, xg_combined_plot, ncol = 2)
+```
+
+```{r}
+bitcoin_data <- bitcoin_data %>%
+  arrange(Date.and.Time) %>%
+  mutate(
+    Lag_1d = lag(Price, 1)
+    #Lag_7d = lag(Price, 7),         # 7 days lag
+    #Lag_15d = lag(Price, 15)        # 15 days lag
+  )
+
+# Remove rows with NA (which will be the initial rows due to lagging)
+bitcoin_data <- na.omit(bitcoin_data)
+
+# View the dataframe to check the lagged features
+head(bitcoin_data)
+```
+
+```{r}
+# Function to calculate MAPE, MSPE, and AIC
+calculate_errors <- function(actual, predicted, model) {
+  # Exclude rows with missing values
+  valid_rows <- complete.cases(actual, predicted)
+  actual <- actual[valid_rows]
+  predicted <- predicted[valid_rows]
+
+  # Calculate MAPE and MSPE
+  mape <- mean(abs((actual - predicted) / actual)) * 100
+  mspe <- mean(((actual - predicted) / actual)^2) * 100
+
+  # Calculate AIC
+  residuals <- actual - predicted
+  n <- length(actual)
+  k <- length(model$coef) - 1  # Number of coefficients, excluding intercept
+  aic <- n * log(sum(residuals^2) / n) + 2 * k
+
+  errors <- data.frame(
+    MAPE = mape,
+    MSPE = mspe,
+    AIC = aic
+  )
+  return(errors)
+}
+
+# Function to perform random forest regression with lagged features and calculate errors
+perform_rf_lagged <- function(train_data, test_data) {
+  #train_feat <- c("power_max","Hash_rate", "Volume", "Lag_7d", "Lag_15d")
+  train_feat <- c("power_max","Hash_rate", "Volume", "Lag_1d")
+  
+  # Train random forest model
+  rf_model_lagged <- randomForest(Price ~ ., data = train_data[, c(train_feat, "Price")])
+  
+  # Predict on test data
+  test_data$predicted <- predict(rf_model_lagged, newdata = test_data[, train_feat])
+  
+  # Calculate MAPE, MSPE, and AIC
+  errors <- calculate_errors(test_data$Price, test_data$predicted, rf_model_lagged)
+  
+  return(list(
+    predictions = data.frame(
+      Date.and.Time = test_data$Date.and.Time,
+      Actual = test_data$Price,
+      Predicted = test_data$predicted
+    ),
+    errors = errors,
+    model = rf_model_lagged  # Store the model in the results
+  ))
+}
+
+# List to store actual vs predicted results and errors for each fold (Random Forest)
+rf_results_list_lagged <- list()
+
+# Manual time series cross-validation for Random Forest with Lagged Features
+for (i in 1 : num_folds) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+  
+  # Split data into training and testing sets
+  train_data <- bitcoin_data[1 : (start_idx + training_size - 1), ]
+  test_data <- bitcoin_data[(start_idx + training_size):end_idx, ]
+  
+  # Perform random forest regression with lagged features
+  results <- perform_rf_lagged(train_data, test_data)
+  
+  # Store results in the list
+  rf_results_list_lagged[[paste("Fold", i)]] <- results
+}
+
+# Calculate averages of MAPE, MSPE, and AIC across all folds for Random Forest with Lagged Features
+rf_average_errors_lagged <- calculate_errors(
+  actual = do.call(rbind, lapply(rf_results_list_lagged, function(x) x$predictions$Actual)),
+  predicted = do.call(rbind, lapply(rf_results_list_lagged, function(x) x$predictions$Predicted)),
+  model = rf_results_list_lagged[[1]]$model  # Assuming all models are the same across folds
+)
+
+# Extract predictions from the list of results
+rf_combined_data_lagged <- do.call(rbind, lapply(seq_along(rf_results_list_lagged), function(i) {
+  fold_data <- rf_results_list_lagged[[i]]$predictions
+  fold_data$Fold <- paste("Fold", i)
+  return(fold_data)
+}))
+
+fold_boundaries <- seq(training_size, length.out = num_folds, by = fold_size)
+
+# Create combined plot for Random Forest with Lagged Features
+rf_combined_plot_lagged <- ggplot(rf_combined_data_lagged) +
+  geom_line(aes(x = Date.and.Time, y = Actual, color = "Actual"), size = 1) +
+  geom_line(aes(x = Date.and.Time, y = Predicted, color = "Predicted", linetype = "solid"), size = 1) +
+  labs(title = paste("Random Forest - Avg MAPE:",
+                     round(rf_average_errors_lagged$MAPE, 2),
+                     ",", "Avg MSPE:", round(rf_average_errors_lagged$MSPE, 2),
+                     ",", "Avg AIC:", round(rf_average_errors_lagged$AIC, 2)),
+       x = "Date", y = "Price", "") +
+  theme_minimal() + 
+  theme(
+    axis.text = element_text(size = 14, face = 'bold'),      
+    axis.title = element_text(size = 14, face = 'bold'),     
+    plot.title = element_text(size = 15, face = 'bold'),
+    legend.text = element_text(size = 14),               
+    legend.title = element_text(size = 14) 
+  ) +
+  geom_vline(data = data.frame(xintercept = fold_boundaries), aes(xintercept = xintercept),
+             linetype = "dashed", color = "black", size = 0.5)
+
+# Save the combined plot as an object
+rf_combined_plot_lagged <- ggplotGrob(rf_combined_plot_lagged)
+```
+
+```{r}
+# Function to calculate MAPE, MSPE, and AIC
+calculate_errors <- function(actual, predicted, model) {
+  # Exclude rows with missing values
+  valid_rows <- complete.cases(actual, predicted)
+  actual <- actual[valid_rows]
+  predicted <- predicted[valid_rows]
+
+  # Calculate MAPE and MSPE
+  mape <- mean(abs((actual - predicted) / actual)) * 100
+  mspe <- mean(((actual - predicted) / actual)^2) * 100
+
+  # Calculate AIC
+  residuals <- actual - predicted
+  n <- length(actual)
+  k <- length(model$coef) - 1  # Number of coefficients, excluding intercept
+  aic <- n * log(sum(residuals^2) / n) + 2 * k
+
+  errors <- data.frame(
+    MAPE = mape,
+    MSPE = mspe,
+    AIC = aic
+  )
+  return(errors)
+}
+
+# Function to train XGBoost model with lagged features and make predictions
+train_and_predict_xgb_lagged <- function(train_data, test_data) {
+  #train_feat <- c("power_max","Hash_rate", "Volume", "Lag_7d", "Lag_15d")
+  train_feat <- c("power_max","Hash_rate", "Volume", "Lag_1d")
+  
+  # Specify XGBoost parameters
+  params <- list(
+    objective = "reg:squarederror"
+  )
+  
+  # Train the XGBoost model using lagged features
+  xgb_model_lagged <- xgboost(
+    data = as.matrix(train_data[, train_feat]),  # Exclude Date.and.Time
+    label = train_data$Price,
+    params = params,
+    nrounds = 500,
+    verbose = 0
+  )
+  
+  # Make predictions on the test set using the same lagged features
+  predictions <- predict(xgb_model_lagged, as.matrix(test_data[, train_feat]))
+  
+  # Calculate MAPE, MSPE, and AIC
+  errors <- calculate_errors(test_data$Price, predictions, xgb_model_lagged)
+  
+  # Store results and return
+  results <- data.frame(
+    Date.and.Time = test_data$Date.and.Time,
+    Actual = test_data$Price,
+    Predicted = predictions,
+    MAPE = errors$MAPE,
+    MSPE = errors$MSPE,
+    AIC = errors$AIC  # Add AIC to the results
+  )
+  
+  return(results)
+}
+
+# List to store actual vs predicted results and errors for each fold (XGBoost with Lagged Features)
+xgb_results_list_lagged <- list()
+
+# Manual time series cross-validation for XGBoost with Lagged Features
+for (i in 1:num_folds) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+  
+  # Split data into training and testing sets
+  train_data <- bitcoin_data[1:(start_idx + training_size - 1), ]
+  test_data <- bitcoin_data[(start_idx + training_size):end_idx, ]
+  
+  # Train XGBoost model with lagged features and make predictions
+  results <- train_and_predict_xgb_lagged(train_data, test_data)
+  
+  # Store results in the list
+  xgb_results_list_lagged[[paste("Fold", i)]] <- results
+}
+
+# Calculate averages of MAPE, MSPE, and AIC across all folds for XGBoost with Lagged Features
+xgb_average_errors_lagged <- calculate_errors(
+  actual = do.call(rbind, lapply(xgb_results_list_lagged, function(x) x$Actual)),
+  predicted = do.call(rbind, lapply(xgb_results_list_lagged, function(x) x$Predicted)),
+  model = xgb_results_list_lagged[[1]]$model  # Assuming all models are the same across folds
+)
+
+# Print average errors for XGBoost with Lagged Features
+#print(xgb_average_errors_lagged)
+
+# Prepare data for combined plot (XGBoost with Lagged Features)
+xgb_combined_data_lagged <- do.call(rbind, lapply(seq_along(xgb_results_list_lagged), function(i) {
+  fold_data <- xgb_results_list_lagged[[i]]
+  fold_data$Fold <- paste("Fold", i)
+  return(fold_data)
+}))
+
+# Create combined plot for XGBoost with Lagged Features
+xg_combined_plot_lagged <- ggplot(xgb_combined_data_lagged) +
+  geom_line(aes(x = Date.and.Time, y = Actual, color = "Actual"), size = 1) +
+  geom_line(aes(x = Date.and.Time, y = Predicted, color = "Predicted", linetype = "solid"), size = 1) +
+  labs(title = paste("XGBoost - Avg MAPE:",
+                    round(xgb_average_errors_lagged$MAPE, 2),
+                    ",", "Avg MSPE:", round(xgb_average_errors_lagged$MSPE, 2),
+                    ",", "Avg AIC:", round(xgb_average_errors_lagged$AIC, 2)),
+       x = "Date", y = "Price") +
+  theme_minimal() + 
+  theme(
+    axis.text = element_text(size = 14, face = 'bold'),      
+    axis.title = element_text(size = 14, face = 'bold'),     
+    plot.title = element_text(size = 15, face = 'bold'),
+    legend.text = element_text(size = 14),               
+    legend.title = element_text(size = 14) 
+  ) 
+
+# Save the combined plot as an object
+xg_combined_plot_lagged <- ggplotGrob(xg_combined_plot_lagged)
+```
+
+```{r, fig.width = 16, fig.height = 4, fig.align = 'center', fig.cap = '**Fig 5. Prediction of Bitcoin price by Random forest (left) and XGBoost regression (right) with 1-day lag feature on the 5 cross folds combined.**'}
+
+# Combine the price prediction plots with lag feature side by side
+grid.arrange(rf_combined_plot_lagged, xg_combined_plot_lagged, ncol = 2)
+```
+
+#### B. CO2 emission prediction
+
+```{r}
+
+# Function to calculate MAPE, MSPE, and AIC
+calculate_errors <- function(actual, predicted, model) {
+  # Exclude rows with missing values
+  valid_rows <- complete.cases(actual, predicted)
+  actual <- actual[valid_rows]
+  predicted <- predicted[valid_rows]
+
+  # Calculate MAPE and MSPE
+  mape <- mean(abs((actual - predicted) / actual)) * 100
+  mspe <- mean(((actual - predicted) / actual)^2) * 100
+
+  # Calculate AIC
+  residuals <- actual - predicted
+  n <- length(actual)
+  k <- length(model$coef) - 1  # Number of coefficients, excluding intercept
+  aic <- n * log(sum(residuals^2) / n) + 2 * k
+
+  errors <- data.frame(
+    MAPE = mape,
+    MSPE = mspe,
+    AIC = aic
+  )
+  return(errors)
+}
+
+# Function to perform random forest regression and calculate errors
+perform_rf <- function(train_data, test_data) {
+  # Input features
+  train_feat <- c('Coal_MtCO2e')
+  
+  # Train random forest model
+  rf_model <- randomForest(Est_MtCO2e ~ ., data = train_data[, c(train_feat, "Est_MtCO2e")])
+  
+  # Predict on test data
+  test_data$predicted <- predict(rf_model, newdata = test_data)
+  
+  # Calculate MAPE, MSPE, and AIC
+  errors <- calculate_errors(test_data$Est_MtCO2e, test_data$predicted, rf_model)
+  
+  return(list(
+    predictions = data.frame(
+      Date.and.Time = test_data$Date.and.Time,
+      Actual = test_data$Est_MtCO2e,
+      Predicted = test_data$predicted
+    ),
+    errors = errors,
+    model = rf_model
+  ))
+}
+
+# List to store actual vs predicted results and errors for each fold
+rf_results_list <- list()
+
+# Manual time series cross-validation
+for (i in 1 : num_folds) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+  
+  # Split data into training and testing sets
+  train_data <- bitcoin_data[1:(start_idx + training_size - 1), ]
+  test_data <- bitcoin_data[(start_idx + training_size) : end_idx, ]
+  
+  # Perform random forest regression
+  results <- perform_rf(train_data, test_data)
+  
+  # Store results in the list
+  rf_results_list[[paste("Fold", i)]] <- results
+}
+
+# Calculate averages of MAPE, MSPE, and AIC across all folds
+average_errors <- calculate_errors(
+  actual = do.call(rbind, lapply(rf_results_list, function(x) x$predictions$Actual)),
+  predicted = do.call(rbind, lapply(rf_results_list, function(x) x$predictions$Predicted)),
+  model = rf_results_list[[1]]$model  # Assuming all models are the same across folds
+)
+
+# Combine plots into a single time series plot
+rf_co2_combined_plot <- ggplot() +
+  geom_line(data = do.call(rbind, lapply(seq_along(rf_results_list), function(i) {
+    results <- rf_results_list[[i]]
+    results$predictions$Fold <- paste("Fold", i)
+    return(results$predictions)
+  })),
+  aes(x = Date.and.Time, y = Actual, color = "Actual"), size = 1, linetype = "solid") +
+  geom_line(data = do.call(rbind, lapply(seq_along(rf_results_list), function(i) {
+    results <- rf_results_list[[i]]
+    results$predictions$Fold <- paste("Fold", i)
+    return(results$predictions)
+  })),
+  aes(x = Date.and.Time, y = Predicted, color = "Predicted", linetype = "solid"), size = 1) +
+  labs(title = paste("Random forest - Avg MAPE:", round(average_errors$MAPE, 2),
+                    ",", "Avg MSPE:", round(average_errors$MSPE, 2),
+                    ",", "Avg AIC:", round(average_errors$AIC, 2)),
+       x = "Date", y = "Estimated MtCO2eq") +
+  theme_minimal() +
+    theme(
+      axis.text = element_text(size = 14, face = 'bold'),      
+      axis.title = element_text(size = 14, face = 'bold'),     
+      plot.title = element_text(size = 15, face = 'bold'),
+      legend.text = element_text(size = 14),               
+      legend.title = element_text(size = 14) 
+    ) +
+  scale_linetype_manual(values = rep("solid", num_folds))
+
+# Save the combined plot as an object
+rf_co2_combined_plot <- ggplotGrob(rf_co2_combined_plot)
+```
+
+```{r}
+
+# Function to calculate MAPE, MSPE, and AIC
+calculate_errors <- function(actual, predicted, model) {
+  # Exclude rows with missing values
+  valid_rows <- complete.cases(actual, predicted)
+  actual <- actual[valid_rows]
+  predicted <- predicted[valid_rows]
+
+  # Calculate MAPE and MSPE
+  mape <- mean(abs((actual - predicted) / actual)) * 100
+  mspe <- mean(((actual - predicted) / actual)^2) * 100
+
+  # Calculate AIC
+  residuals <- actual - predicted
+  n <- length(actual)
+  k <- length(model$coef) - 1  # Number of coefficients, excluding intercept
+  aic <- n * log(sum(residuals^2) / n) + 2 * k
+
+  errors <- data.frame(
+    MAPE = mape,
+    MSPE = mspe,
+    AIC = aic
+  )
+  return(errors)
+}
+
+# Function to perform XGBoost regression and calculate errors
+perform_xgb <- function(train_data, test_data, fold_number) {
+  # Specify XGBoost parameters
+  params <- list(
+    objective = "reg:squarederror"
+  )
+  
+  # Train the XGBoost model
+  train_feat <- c('Coal_MtCO2e')
+  
+  xgb_model <- xgboost(
+    data = as.matrix(train_data[, train_feat]),  # Exclude Date.and.Time
+    label = train_data$Est_MtCO2e,
+    params = params,
+    nrounds = 500,
+    verbose = 0  # Suppress printing of train-rmse
+  )
+  
+  # Make predictions on the test set
+  predictions <- predict(xgb_model, as.matrix(test_data[, train_feat]))
+  
+  # Calculate MAPE, MSPE, and AIC
+  errors <- calculate_errors(test_data$Est_MtCO2e, predictions, xgb_model)
+  
+  # Store results without printing
+  results <- data.frame(
+    Date.and.Time = test_data$Date.and.Time,
+    Actual = test_data$Est_MtCO2e,
+    Predicted = predictions,
+    MAPE = errors$MAPE,
+    MSPE = errors$MSPE,
+    AIC = errors$AIC,  # Add AIC to the results
+    Fold = paste("Fold", fold_number)
+  )
+  return(results)
+}
+
+# List to store actual vs predicted results and errors for each fold
+xg_results_list <- list()
+
+# Manual time series cross-validation
+for (i in 1 : num_folds) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+  
+  # Split data into training and testing sets
+  train_data <- bitcoin_data[1 : (start_idx + training_size - 1), ]
+  test_data <- bitcoin_data[(start_idx + training_size) : end_idx, ]
+  
+  # Perform XGBoost regression
+  results <- perform_xgb(train_data, test_data, i)
+  
+  # Store results in the list
+  xg_results_list[[paste("Fold", i)]] <- results
+}
+
+# Combine actual and predicted values from all folds
+combined_data <- bind_rows(xg_results_list)
+
+# Calculate averages of MAPE, MSPE, and AIC across all folds
+average_errors <- calculate_errors(
+  actual = combined_data$Actual,
+  predicted = combined_data$Predicted,
+  model = xg_results_list[[1]]$model  # Assuming all models are the same across folds
+)
+
+fold_boundaries <- rep(seq(1, num_folds - 1), each = training_size - 1) * fold_size
+
+# Combine plots into a single time series plot
+xg_co2_combined_plot <- ggplot() +
+  geom_line(data = combined_data,
+            aes(x = Date.and.Time, y = Actual, color = "Actual"), size = 1, linetype = "solid") +
+  geom_line(data = combined_data,
+            aes(x = Date.and.Time, y = Predicted, color = "Predicted", linetype = "solid"), size = 1) +
+  scale_y_continuous(limits = c(15, 70)) +
+  labs(title = paste("XGBoost - Avg MAPE:", round(average_errors$MAPE, 2),
+                    ",", "Avg MSPE:", round(average_errors$MSPE, 2),
+                    ",", "Avg AIC:", round(average_errors$AIC, 2)),
+       x = "Date", y = "Estimated MtCO2eq") +
+  theme_minimal() + 
+  theme(
+    axis.text = element_text(size = 14, face = 'bold'),      
+    axis.title = element_text(size = 14, face = 'bold'),     
+    plot.title = element_text(size = 15, face = 'bold'),
+    legend.text = element_text(size = 14),               
+    legend.title = element_text(size = 14) 
+  ) +
+  scale_linetype_manual(values = rep("solid", num_folds)) 
+
+# Save the combined plot as an object
+xg_co2_combined_plot <- ggplotGrob(xg_co2_combined_plot)
+```
+
+```{r, fig.width = 16, fig.height = 4, fig.align = 'center', fig.cap = '**Fig 6. Prediction of CO2 emission by Random forest (left) and XGBoost regression (right) on the 5 cross folds combined.**'}
+
+# Combine the price prediction plots side by side
+grid.arrange(rf_co2_combined_plot, xg_co2_combined_plot, ncol = 2)
+```
+
+```{r}
+bitcoin_data <- bitcoin_data %>%
+  arrange(Date.and.Time) %>%
+  mutate(
+    Lag_1d = lag(Est_MtCO2e, 1)
+    #Lag_7d = lag(Est_MtCO2e, 7),         # 7 days lag
+    #Lag_15d = lag(Est_MtCO2e, 15)        # 15 days lag
+  )
+
+# Remove rows with NA (which will be the initial rows due to lagging)
+bitcoin_data <- na.omit(bitcoin_data)
+
+# View the dataframe to check the lagged features
+head(bitcoin_data)
+```
+
+```{r}
+# Function to calculate MAPE, MSPE, and AIC
+calculate_errors <- function(actual, predicted, model) {
+  # Exclude rows with missing values
+  valid_rows <- complete.cases(actual, predicted)
+  actual <- actual[valid_rows]
+  predicted <- predicted[valid_rows]
+
+  # Calculate MAPE and MSPE
+  mape <- mean(abs((actual - predicted) / actual)) * 100
+  mspe <- mean(((actual - predicted) / actual)^2) * 100
+
+  # Calculate AIC
+  residuals <- actual - predicted
+  n <- length(actual)
+  k <- length(model$coef) - 1  # Number of coefficients, excluding intercept
+  aic <- n * log(sum(residuals^2) / n) + 2 * k
+
+  errors <- data.frame(
+    MAPE = mape,
+    MSPE = mspe,
+    AIC = aic
+  )
+  return(errors)
+}
+
+# Function to perform random forest regression with lagged features and calculate errors
+perform_rf_lagged <- function(train_data, test_data) {
+  #train_feat <- c("Coal_MtCO2e", "Lag_7d", "Lag_15d")
+  train_feat <- c("Coal_MtCO2e", "Lag_1d")
+  
+  # Train random forest model
+  rf_model_lagged <- randomForest(Est_MtCO2e ~ ., data = train_data[, c(train_feat, "Est_MtCO2e")])
+  
+  # Predict on test data
+  test_data$predicted <- predict(rf_model_lagged, newdata = test_data[, train_feat])
+  
+  # Calculate MAPE, MSPE, and AIC
+  errors <- calculate_errors(test_data$Est_MtCO2e, test_data$predicted, rf_model_lagged)
+  
+  return(list(
+    predictions = data.frame(
+      Date.and.Time = test_data$Date.and.Time,
+      Actual = test_data$Est_MtCO2e,
+      Predicted = test_data$predicted
+    ),
+    errors = errors,
+    model = rf_model_lagged  # Store the model in the results
+  ))
+}
+
+# List to store actual vs predicted results and errors for each fold (Random Forest)
+rf_results_list_lagged <- list()
+
+# Manual time series cross-validation for Random Forest with Lagged Features
+for (i in 1 : num_folds) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+  
+  # Split data into training and testing sets
+  train_data <- bitcoin_data[1 : (start_idx + training_size - 1), ]
+  test_data <- bitcoin_data[(start_idx + training_size):end_idx, ]
+  
+  # Perform random forest regression with lagged features
+  results <- perform_rf_lagged(train_data, test_data)
+  
+  # Store results in the list
+  rf_results_list_lagged[[paste("Fold", i)]] <- results
+}
+
+# Calculate averages of MAPE, MSPE, and AIC across all folds for Random Forest with Lagged Features
+rf_average_errors_lagged <- calculate_errors(
+  actual = do.call(rbind, lapply(rf_results_list_lagged, function(x) x$predictions$Actual)),
+  predicted = do.call(rbind, lapply(rf_results_list_lagged, function(x) x$predictions$Predicted)),
+  model = rf_results_list_lagged[[1]]$model  # Assuming all models are the same across folds
+)
+
+# Extract predictions from the list of results
+rf_combined_data_lagged <- do.call(rbind, lapply(seq_along(rf_results_list_lagged), function(i) {
+  fold_data <- rf_results_list_lagged[[i]]$predictions
+  fold_data$Fold <- paste("Fold", i)
+  return(fold_data)
+}))
+
+fold_boundaries <- seq(training_size, length.out = num_folds, by = fold_size)
+
+# Create combined plot for Random Forest with Lagged Features
+rf_co2_combined_plot_lagged <- ggplot(rf_combined_data_lagged) +
+  geom_line(aes(x = Date.and.Time, y = Actual, color = "Actual"), size = 1) +
+  geom_line(aes(x = Date.and.Time, y = Predicted, color = "Predicted", linetype = "solid"), size = 1) +
+  labs(title = paste("Random Forest - Avg MAPE:",
+                     round(rf_average_errors_lagged$MAPE, 2),
+                     ",", "Avg MSPE:", round(rf_average_errors_lagged$MSPE, 2),
+                     ",", "Avg AIC:", round(rf_average_errors_lagged$AIC, 2)),
+       x = "Date", y = "Estimated MtCO2e", "") +
+  theme_minimal() + 
+  theme(
+    axis.text = element_text(size = 14, face = 'bold'),      
+    axis.title = element_text(size = 14, face = 'bold'),     
+    plot.title = element_text(size = 15, face = 'bold'),
+    legend.text = element_text(size = 14),               
+    legend.title = element_text(size = 14) 
+  ) +
+  geom_vline(data = data.frame(xintercept = fold_boundaries), aes(xintercept = xintercept),
+             linetype = "dashed", color = "black", size = 0.5)
+
+# Save the combined plot as an object
+rf_co2_combined_plot_lagged <- ggplotGrob(rf_co2_combined_plot_lagged)
+```
+
+```{r}
+# Function to calculate MAPE, MSPE, and AIC
+calculate_errors <- function(actual, predicted, model) {
+  # Exclude rows with missing values
+  valid_rows <- complete.cases(actual, predicted)
+  actual <- actual[valid_rows]
+  predicted <- predicted[valid_rows]
+
+  # Calculate MAPE and MSPE
+  mape <- mean(abs((actual - predicted) / actual)) * 100
+  mspe <- mean(((actual - predicted) / actual)^2) * 100
+
+  # Calculate AIC
+  residuals <- actual - predicted
+  n <- length(actual)
+  k <- length(model$coef) - 1  # Number of coefficients, excluding intercept
+  aic <- n * log(sum(residuals^2) / n) + 2 * k
+
+  errors <- data.frame(
+    MAPE = mape,
+    MSPE = mspe,
+    AIC = aic
+  )
+  return(errors)
+}
+
+# Function to train XGBoost model with lagged features and make predictions
+train_and_predict_xgb_lagged <- function(train_data, test_data) {
+  #train_feat <- c('Coal_MtCO2e', "Lag_7d", "Lag_15d")
+  train_feat <- c("Coal_MtCO2e", "Lag_1d")
+  
+  # Specify XGBoost parameters
+  params <- list(
+    objective = "reg:squarederror"
+  )
+  
+  # Train the XGBoost model using lagged features
+  xgb_model_lagged <- xgboost(
+    data = as.matrix(train_data[, train_feat]),  # Exclude Date.and.Time
+    label = train_data$Est_MtCO2e,
+    params = params,
+    nrounds = 500,
+    verbose = 0
+  )
+  
+  # Make predictions on the test set using the same lagged features
+  predictions <- predict(xgb_model_lagged, as.matrix(test_data[, train_feat]))
+  
+  # Calculate MAPE, MSPE, and AIC
+  errors <- calculate_errors(test_data$Est_MtCO2e, predictions, xgb_model_lagged)
+  
+  # Store results and return
+  results <- data.frame(
+    Date.and.Time = test_data$Date.and.Time,
+    Actual = test_data$Est_MtCO2e,
+    Predicted = predictions,
+    MAPE = errors$MAPE,
+    MSPE = errors$MSPE,
+    AIC = errors$AIC  # Add AIC to the results
+  )
+  
+  return(results)
+}
+
+# List to store actual vs predicted results and errors for each fold (XGBoost with Lagged Features)
+xgb_results_list_lagged <- list()
+
+# Manual time series cross-validation for XGBoost with Lagged Features
+for (i in 1:num_folds) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+  
+  # Split data into training and testing sets
+  train_data <- bitcoin_data[1:(start_idx + training_size - 1), ]
+  test_data <- bitcoin_data[(start_idx + training_size):end_idx, ]
+  
+  # Train XGBoost model with lagged features and make predictions
+  results <- train_and_predict_xgb_lagged(train_data, test_data)
+  
+  # Store results in the list
+  xgb_results_list_lagged[[paste("Fold", i)]] <- results
+}
+
+# Calculate averages of MAPE, MSPE, and AIC across all folds for XGBoost with Lagged Features
+xgb_average_errors_lagged <- calculate_errors(
+  actual = do.call(rbind, lapply(xgb_results_list_lagged, function(x) x$Actual)),
+  predicted = do.call(rbind, lapply(xgb_results_list_lagged, function(x) x$Predicted)),
+  model = xgb_results_list_lagged[[1]]$model  # Assuming all models are the same across folds
+)
+
+# Print average errors for XGBoost with Lagged Features
+print(xgb_average_errors_lagged)
+
+# Prepare data for combined plot (XGBoost with Lagged Features)
+xgb_combined_data_lagged <- do.call(rbind, lapply(seq_along(xgb_results_list_lagged), function(i) {
+  fold_data <- xgb_results_list_lagged[[i]]
+  fold_data$Fold <- paste("Fold", i)
+  return(fold_data)
+}))
+
+# Create combined plot for XGBoost with Lagged Features
+xg_co2_combined_plot_lagged <- ggplot(xgb_combined_data_lagged) +
+  geom_line(aes(x = Date.and.Time, y = Actual, color = "Actual"), size = 1) +
+  geom_line(aes(x = Date.and.Time, y = Predicted, color = "Predicted", linetype = "solid"), size = 1) +
+  labs(title = paste("XGBoost - Avg MAPE:",
+                    round(xgb_average_errors_lagged$MAPE, 2),
+                    ",", "Avg MSPE:", round(xgb_average_errors_lagged$MSPE, 2),
+                    ",", "Avg AIC:", round(xgb_average_errors_lagged$AIC, 2)),
+       x = "Date", y = "Estimated MtCO2eq") +
+  theme_minimal() + 
+  theme(
+    axis.text = element_text(size = 14, face = 'bold'),      
+    axis.title = element_text(size = 14, face = 'bold'),     
+    plot.title = element_text(size = 15, face = 'bold'),
+    legend.text = element_text(size = 14),               
+    legend.title = element_text(size = 14) 
+  ) +
+  scale_y_continuous(limit = c(15, 70))
+
+# Save the combined plot as an object
+xg_co2_combined_plot_lagged <- ggplotGrob(xg_co2_combined_plot_lagged)
+```
+
+```{r, fig.width = 16, fig.height = 4, fig.align = 'center', fig.cap = '**Fig 7. Prediction of CO2 emission by Random forest (left) and XGBoost regression (right) with 1-day lag feature on the 5 cross folds combined.**'}
+
+# Combine the price prediction plots side by side
+grid.arrange(rf_co2_combined_plot_lagged, xg_co2_combined_plot_lagged, ncol = 2)
+```
+
+## Conclusions
+
+
+
+
+
+
