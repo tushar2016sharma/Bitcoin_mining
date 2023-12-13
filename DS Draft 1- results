@@ -1,0 +1,9 @@
+Cross Validation Image
+
+
+
+The implementation of a manual cross-validation technique tailored for time series data analysis of Bitcoin prices, using a rolling window approach rather than random splitting due to the sequential nature of the dataset. Specifically, the script establishes a series of temporal folds, each encompassing 363 days, against a substantial training set size of 3000 days, ensuring that a complete integer number of folds is utilized without exceeding the available data.
+
+The image shows five distinct cross-validation folds, each divided into training and test segments—the training segment is illustrated with a blue line, while the test segment is depicted in red. This clear segmentation is indicative of the model's training phase on historical data (blue) before being subjected to the prediction phase (red), providing a pragmatic framework to evaluate the model's predictive accuracy on data it has not previously encountered.
+
+A close examination of the visualized data across the five folds reveals notable price volatility within the Bitcoin market, characterized by drastic fluctuations and several prominent peaks, each of which is captured within different folds. This variability is crucial for assessing the model's robustness, as it ensures that the model's predictive capabilities are tested against a diverse array of market conditions and behaviors, ranging from steady inclines to abrupt declines. The ability of the model to adapt to these conditions can significantly inform its reliability and effectiveness in real-world applications.
