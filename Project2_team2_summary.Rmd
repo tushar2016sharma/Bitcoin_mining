@@ -1,0 +1,1199 @@
+---
+title: "Environmental Impacts of Bitcoin Mining: Machine Learning Model Evaluations"
+output: 
+  html_document:
+    code_folding: hide
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+```{r setup, include = FALSE, out.width = "100%", out.height = "100%"}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+<br>
+
+#### **Authors**: Tushar Sharma, Kusum Sai Chowdary, Brian Kim
+
+#### **Keywords-** Bitcoin mining, Random Forest, XGBoost, time series
+
+<br>
+
+**Abstract-** This research project comprehensively analyzes the environmental consequences of Bitcoin mining through traditional machine learning approach. The study focuses on two primary objectives which are referred to as SMART (Specific Measurable Attainable Relevant and Timely) questions: 1)  The prediction of Bitcoin price based on the historical market conditions and other important predictors. 2) Prediction of CO~2~~ emission which will provide insights about the carbon footprint of Bitcoin mining.
+
+## Introduction
+
+In the world of finance and investment, Bitcoin has emerged as a transformative digital cryptocurrency, revolutionizing traditional economic paradigms and offering a decentralized alternative for transactions. The foundation of Bitcoin mining lies in the ingenious “proof of work” (PoW) algorithm, a complex mechanism designed to validate transactions and secure the network. Miners face the formidable challenge of discovering a specific nonce, a seemingly random number that, when combined with the block’s contents, produces a hash value that adheres to predefined criteria. This process necessitates substantial computational power and operates through trial and error, with miners employing specialized hardware, including Application-Specific Integrated Circuits (ASICs) and Graphics Processing Units (GPUs), meticulously engineered for efficient PoW calculations. While Bitcoin mining plays a vital role in upholding network security and trust, it also carries a significant environmental cost. The surging energy consumption of Bitcoin mining, exacerbated by its rapid expansion, has raised concerns about its contribution to greenhouse gas emissions and global climate change. These concerns necessitate a thorough analysis of the intricate relationship between Bitcoin mining and the environmental impacts. The inception of blockchain technology can be attributed to Bitcoin, which marked the initial and successful endeavor to authenticate transactions using a decentralized data protocol. Engaging in the validation of these transactions demands specific hardware and substantial energy usage, resulting in a substantial carbon footprint [1].
+
+The evolution of the field of Bitcoin mining and its environmental consequences mirrors the dynamic growth and transformation of the broader cryptocurrency ecosystem. In the early days of Bitcoin, mining was a relatively obscure and niche activity, with a limited number of enthusiasts participating in the network. Miners often operated on personal computers, and the energy footprint was minimal. However, as Bitcoin’s value surged and its popularity grew, the landscape of mining underwent a profound shift. With the advent of ASICs and more specialized hardware, miners gained a substantial edge in terms of computational power and efficiency. This development paved the way for large-scale mining operations and industrial mining farms. Consequently, the energy consumption associated with Bitcoin mining skyrocketed, resulting in increased scrutiny and environmental concerns. Based on our 2017 estimates, Bitcoin’s energy consumption was on par with that of Angola or Panama, which were ranked 102nd and 103rd in terms of total energy consumption. To put it in perspective, Bitcoin used about 948 MW, equivalent to 8.3 billion kWh annually [2].
+
+The environmental consequences of Bitcoin mining have become a central topic of debate and research within the cryptocurrency space. As Bitcoin’s market capitalization continued to rise, so did its energy consumption. This evolution prompted researchers to explore the environmental impact more deeply and assess the sustainability of the PoW consensus mechanism. As Bitcoin’s environmental impact has garnered greater attention, it has also sparked discussions about potential solutions and alternatives. Innovations like proof-of-stake (PoS) and other consensus mechanisms designed to be more energy-efficient have gained traction in the cryptocurrency community. Researchers and industry stakeholders are actively exploring how to mitigate the environmental consequences of Bitcoin mining while preserving the network’s security and integrity.
+
+This research project aims to contribute to this evolving field by understanding Bitcoin mining activity through a machine learning predictive approach and exploring its environmental consequences in order to inform policies and industry practices. The paper is organized into three main sections: The first section provides an overview of the data used in the study and basic Exploratory Data Analysis (EDA). The second section discusses the results of the predictions of Bitcoin price and carbon dioxide emission in two ways- without and with the inclusion of lag features. The final section offers conclusions drawn from the findings.
+
+## Data 
+
+The data has been taken from the [Cambridge Centre for Alternative Finance (CCAF) website](https://ccaf.io/cbnsi/cbeci) [3]. The data available on the website is real-time data. Also, different types of information pertaining to Bitcoin mining is available in separate sections on the website. This information has been combined in the form of different features and made into one single dataset consisting of 4815 records and 15 initial features. The records start from Jul 18, 2010 to Sep 22, 2023. The data for spatial analysis includes monthly absolute and percentage hash rate values for different countries and is added to this data. The network hash rate data has been taken from the [NASDAQ website](https://data.nasdaq.com/data/BCHAIN/HRATE-bitcoin-hash-rate) [4]. The data for Bitcoin price and volume has been taken from [Bitcoinity.org](https://data.bitcoinity.org/markets/price_volume/all/USD?t=lb&vu=curr)[5].
+
+```{r}
+library(caret)
+library(zoo)
+library(ggplot2)
+library(corrplot)
+library(tidyverse)
+library(gridExtra)
+library(randomForest)
+library(xgboost)
+```
+
+```{r}
+bitcoin_data <- read.csv("https://raw.githubusercontent.com/tushar2016sharma/Bitcoin_mining/main/bitcoin_mining.csv")
+```
+
+```{r}
+# Create a vector with names for all columns
+new_column_names <- c("Date.and.Time",
+  "power_max", "power_min", "power_guess",
+  "ann_consumption_max", "ann_consumption_min", "ann_consumption_guess",
+  "LB_efficiency", "Est_efficiency", "UB_efficiency",
+  "Hydro_MtCO2e", "Est_MtCO2e", "Coal_MtCO2e", "CO2_emission",
+  "Hash_rate", "Price", "Volume"
+)
+
+# Rename the columns
+colnames(bitcoin_data) <- new_column_names
+```
+
+## Methodology
+
+### A. Bitcoin price and CO~2~ emissions
+
+As a first step, the trend of Bitcoin price and CO~2~ emissions over time has been analyzed through their time series plots shown in Fig. 1. It can be observed that since Bitcoin activity begain in 2010, all the way until 2017, there has not been much Bitcoin mining activity. However, both price and CO~2~ emissions begin to increase thereafter. The environmental impact of Bitcoin mining is analyzed by visualizing the CO~2~ emissions (in MtCO~2~e) over time. A work by Calvo-Pardo et al. (2022) deals with similar analysis utilizing machine learning methods [6].
+
+
+```{r, fig.width = 2, fig.height = 4, fig.align = 'center', fig.cap = "**Bitcoin price and estimated MtCO~2~e (CO~2~ emission) with time.**"}
+knitr::include_graphics("https://github.com/tushar2016sharma/Bitcoin_mining/blob/main/image1.jpg?raw=true")
+```
+
+### B. Stationarity
+
+In the context of time series analysis, a stationary process is one in which statistical properties like mean, variance, and standard deviation remain constant over time. This means that the series does not exhibit any predictable long-term patterns. Conversely, if these statistical properties change over time, the time series is considered non-stationary. The importance of stationarity analysis in time series analysis can be summarized for two main reasons:
+
+1. Predictability: Stationarity is crucial for many forecasting methods. When a time series exhibits a consistent behavior over time, it is more likely to continue following the same pattern in the future. This makes it easier to predict future values based on historical data.
+
+2. Model Simplicity: Stationary processes are simpler to model. Non-stationary data often require additional steps such as differencing or transformations to make them stationary, which can add complexity to the modeling process.
+
+The stationarity analysis for different features of initial Bitcoin data has been presented in Fig. 2.  
+
+```{r, fig.height = 10, fig.width = 12, fig.align = 'center', fig.cap = '**Fig. 2. Rolling mean and standard deviation of the features.**'}
+
+knitr::include_graphics("https://github.com/tushar2016sharma/Bitcoin_mining/blob/main/image2.png?raw=true")
+```
+
+### C. Modeling approach
+
+#### *C. i) Time series cross validation*
+
+Instead of using a regular train-test data split or a regular k-fold cross validation, a rolling window approach or nested cross validation has been employed due to the sequential and temporal nature of the data. Specifically, the script establishes a series of temporal folds, each encompassing testing data of 363 days, against a substantial training set size of 3000 days. In each subsequent fold, the testing data from the previous fold is being added until all the data has been exhausted. 
+
+Fig. 3 shows five distinct cross-validation folds, each divided into training and test segments—the training segment is illustrated with a blue line, while the test segment is depicted in red. This clear segmentation is indicative of the model's training phase on historical data (blue) before being subjected to the prediction phase (red), providing a pragmatic framework to evaluate the model's predictive accuracy on data it has not previously encountered.
+
+
+```{r, fig.height = 8, fig.width = 6, fig.align = 'center', fig.cap = '**Fig. 3. Time series cross validation folds for Bitcoin price.**'}
+
+bitcoin_data$Date.and.Time <- as.Date(bitcoin_data$Date.and.Time)
+
+# Sort data by 'Date.and.Time'
+bitcoin_data <- bitcoin_data[order(bitcoin_data$Date.and.Time), ]
+
+# Function to plot training and test sets
+plot_train_test <- function(train_data, test_data, title) {
+  ggplot() +
+    geom_line(data = train_data, aes(x = Date.and.Time, y = Price), color = "blue", size = 1) +
+    geom_line(data = test_data, aes(x = Date.and.Time, y = Price), color = "red", size = 1) +
+    labs(title = title, x = "Date", y = "Price") +
+    theme_minimal()
+}
+
+# Manual time series cross-validation
+fold_size <- 363
+training_size <- 3000
+num_folds <- floor((nrow(bitcoin_data) - training_size) / fold_size) # better to have floor division
+
+# Generate subplots for each fold
+plots <- lapply(1 : num_folds, function(i) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+
+  train_data <- bitcoin_data[1 : (start_idx + training_size - 1), ]  # Update training set
+  test_data <- bitcoin_data[(start_idx + training_size) : end_idx, ]
+
+  title <- paste("Fold", i)
+  plot_train_test(train_data, test_data, title) +
+    xlim(range(bitcoin_data$Date.and.Time))  # Set x-axis limit for the entire date range
+}) 
+
+# Combine plots into a single facet_wrap
+
+multiplot <- do.call(grid.arrange, c(plots, ncol = 1))
+
+# Apply theme settings
+multiplot <- multiplot +
+  theme(
+    axis.text = element_text(size = 14, face = 'bold'),      
+    axis.title = element_text(size = 14, face = 'bold'),     
+    plot.title = element_text(size = 14, face = 'bold'),
+    legend.text = element_text(size = 12),               
+    legend.title = element_text(size = 12)
+  )
+```
+
+#### *C. ii) Random Forest model*
+
+Random Forest Regression, an ensemble learning algorithm, demonstrates effectiveness in predicting time series data, though it may not be first choice in such problems. Its ability to handle non-linearity, robustness to outliers, consideration of multiple variables, and resistance to overfitting make it a versatile choice. The model's feature importance analysis aids in understanding variable contributions, enhancing interpretability in time series dynamics. 
+
+#### *C. iii) XGBoost model*
+
+XGBoost, an advanced gradient boosting algorithm, is highly effective in time series data predictions. Its strengths lie in capturing complex temporal patterns, handling missing values, and accounting for non-linear relationships. XGBoost's regularization techniques prevent overfitting, while its ability to incorporate sequential information enhances its utility for time-dependent datasets. The model's feature importance analysis aids interpretability, making XGBoost a powerful choice for accurate and robust time series forecasting.
+
+Random forest and XGBoost models have been used in this study to predict the Bitcoin price and CO~2~ emission. A basic parameter tuning has been carried out and table 1 summarizes the parameters retained for the two models in the prediction of both quantities. 
+
+
+```{r, fig.height = 4, fig.width = 10, fig.align = 'center', fig.cap = '**Table. 1. Model configurations retained for both Bitcoin price and CO~2~ emission predictions.**'}
+
+knitr::include_graphics("https://github.com/tushar2016sharma/Bitcoin_mining/blob/main/table1.jpeg?raw=true")
+```
+
+## Results
+
+### A. Bitcoin price prediction
+
+The evaluation of a Random Forest model applied to Bitcoin price prediction is presented, illustrating the model's varying degree of success across different temporal segments. Fig. 4 shows a comparison of actual and predicted Bitcoin prices, with the random forest model achieving an average Mean Absolute Percentage Error (MAPE) of 26.28, indicating a moderate prediction accuracy, and an average Mean Squared Prediction Error (MSPE) of 12.71, reflecting the variance of the predictions from the actual values. Notably, the model's Akaike Information Criterion (AIC) averages at 34607.51, serving as a gauge for the model's relative quality. The predictive trajectory closely mirrors the actual price movements, though it struggles with the market's pronounced peaks and troughs, underscoring the inherent volatility and unpredictability of cryptocurrency markets.
+
+
+```{r}
+# Function to calculate MAPE, MSPE, and AIC
+calculate_errors <- function(actual, predicted, model) {
+  # Exclude rows with missing values
+  valid_rows <- complete.cases(actual, predicted)
+  actual <- actual[valid_rows]
+  predicted <- predicted[valid_rows]
+
+  # Calculate MAPE and MSPE
+  mape <- mean(abs((actual - predicted) / actual)) * 100
+  mspe <- mean(((actual - predicted) / actual)^2) * 100
+
+  # Calculate AIC
+  residuals <- actual - predicted
+  n <- length(actual)
+  k <- length(model$coef) - 1  # Number of coefficients, excluding intercept
+  aic <- n * log(sum(residuals^2) / n) + 2 * k
+
+  errors <- data.frame(
+    MAPE = mape,
+    MSPE = mspe,
+    AIC = aic
+  )
+  return(errors)
+}
+
+# Function to perform random forest regression and calculate errors
+perform_rf <- function(train_data, test_data) {
+  # Input features
+  train_feat <- c("power_max","Hash_rate", "Volume")
+  
+  set.seed(186)
+  # Train random forest model
+  rf_model <- randomForest(Price ~ ., data = train_data[, c(train_feat, "Price")])
+  
+  # Predict on test data
+  test_data$predicted <- predict(rf_model, newdata = test_data)
+  
+  # Calculate MAPE, MSPE, and AIC
+  errors <- calculate_errors(test_data$Price, test_data$predicted, rf_model)
+  
+  return(list(
+    predictions = data.frame(
+      Date.and.Time = test_data$Date.and.Time,
+      Actual = test_data$Price,
+      Predicted = test_data$predicted
+    ),
+    errors = errors,
+    model = rf_model
+  ))
+}
+
+# List to store actual vs predicted results and errors for each fold
+rf_results_list <- list()
+
+# Manual time series cross-validation
+for (i in 1 : num_folds) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+  
+  # Split data into training and testing sets
+  train_data <- bitcoin_data[1:(start_idx + training_size - 1), ]
+  test_data <- bitcoin_data[(start_idx + training_size) : end_idx, ]
+  
+  # Perform random forest regression
+  results <- perform_rf(train_data, test_data)
+  
+  # Store results in the list
+  rf_results_list[[paste("Fold", i)]] <- results
+}
+
+# Calculate averages of MAPE, MSPE, and AIC across all folds
+average_errors <- calculate_errors(
+  actual = do.call(rbind, lapply(rf_results_list, function(x) x$predictions$Actual)),
+  predicted = do.call(rbind, lapply(rf_results_list, function(x) x$predictions$Predicted)),
+  model = rf_results_list[[1]]$model  # Assuming all models are the same across folds
+)
+
+# Combine plots into a single time series plot
+rf_combined_plot <- ggplot() +
+  geom_line(data = do.call(rbind, lapply(seq_along(rf_results_list), function(i) {
+    results <- rf_results_list[[i]]
+    results$predictions$Fold <- paste("Fold", i)
+    return(results$predictions)
+  })),
+  aes(x = Date.and.Time, y = Actual, color = "Actual"), size = 1, linetype = "solid") +
+  geom_line(data = do.call(rbind, lapply(seq_along(rf_results_list), function(i) {
+    results <- rf_results_list[[i]]
+    results$predictions$Fold <- paste("Fold", i)
+    return(results$predictions)
+  })),
+  aes(x = Date.and.Time, y = Predicted, color = "Predicted", linetype = "solid"), size = 1) +
+  labs(title = paste("Random forest - Avg MAPE:", round(average_errors$MAPE, 2),
+                    ",", "Avg MSPE:", round(average_errors$MSPE, 2),
+                    ",", "Avg AIC:", round(average_errors$AIC, 2)),
+       x = "Date", y = "Price") +
+  theme_minimal() +
+    theme(
+      axis.text = element_text(size = 14, face = 'bold'),      
+      axis.title = element_text(size = 14, face = 'bold'),     
+      plot.title = element_text(size = 15, face = 'bold'),
+      legend.text = element_text(size = 14),               
+      legend.title = element_text(size = 14) 
+    ) +
+  scale_linetype_manual(values = rep("solid", num_folds))
+
+# Save the combined plot as an object
+rf_combined_plot <- ggplotGrob(rf_combined_plot)
+```
+
+The XG Boost model applied to Bitcoin price predictions indicate that the model has a close following of the actual price movements, denoted by the red line, with its predictions. The model records an average Mean Absolute Percentage Error (MAPE) of 25.99, reflecting a moderate level of accuracy in its predictions. The Mean Squared Prediction Error (MSPE) stands at 12.68, which points to the model's ability to predict with a reasonable degree of precision, and the average Akaike Information Criterion (AIC) is 34660.88, suggesting the model's goodness of fit to the data.
+
+The results reflect the model's challenge in capturing the extreme peaks (through most of 2021) of the Bitcoin price, a common difficulty in the volatile cryptocurrency market. These findings emphasize the complexities of financial time series forecasting and the need for robust modeling techniques to handle the unpredictable nature of such data. Perhaps, with more number of cross folds as opposed to 5, the model might be able to learn more of the trends in the data iteratively as it is tested on a smaller window size.  
+
+```{r}
+# Function to calculate MAPE, MSPE, and AIC
+calculate_errors <- function(actual, predicted, model) {
+  # Exclude rows with missing values
+  valid_rows <- complete.cases(actual, predicted)
+  actual <- actual[valid_rows]
+  predicted <- predicted[valid_rows]
+
+  # Calculate MAPE and MSPE
+  mape <- mean(abs((actual - predicted) / actual)) * 100
+  mspe <- mean(((actual - predicted) / actual)^2) * 100
+
+  # Calculate AIC
+  residuals <- actual - predicted
+  n <- length(actual)
+  k <- length(model$coef) - 1  # Number of coefficients, excluding intercept
+  aic <- n * log(sum(residuals^2) / n) + 2 * k
+
+  errors <- data.frame(
+    MAPE = mape,
+    MSPE = mspe,
+    AIC = aic
+  )
+}
+
+# Function to perform XGBoost regression and calculate errors
+perform_xgb <- function(train_data, test_data, fold_number) {
+  # Specify XGBoost parameters
+  params <- list(
+    objective = "reg:squarederror"
+  )
+  
+  # Train the XGBoost model
+  train_feat <- c("power_max","Hash_rate", "Volume")
+  
+  set.seed(247)
+  xgb_model <- xgboost(
+    data = as.matrix(train_data[, train_feat]),  # Exclude Date.and.Time
+    label = train_data$Price,
+    params = params,
+    nrounds = 500,
+    verbose = 0  # Suppress printing of train-rmse
+  )
+  
+  # Make predictions on the test set
+  predictions <- predict(xgb_model, as.matrix(test_data[, train_feat]))
+  
+  # Calculate MAPE, MSPE, and AIC
+  errors <- calculate_errors(test_data$Price, predictions, xgb_model)
+  
+  # Store results without printing
+  results <- data.frame(
+    Date.and.Time = test_data$Date.and.Time,
+    Actual = test_data$Price,
+    Predicted = predictions,
+    MAPE = errors$MAPE,
+    MSPE = errors$MSPE,
+    AIC = errors$AIC,  # Add AIC to the results
+    Fold = paste("Fold", fold_number)
+  )
+}
+
+# List to store actual vs predicted results and errors for each fold
+xg_results_list <- list()
+
+# Manual time series cross-validation
+for (i in 1 : num_folds) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+  
+  # Split data into training and testing sets
+  train_data <- bitcoin_data[1 : (start_idx + training_size - 1), ]
+  test_data <- bitcoin_data[(start_idx + training_size) : end_idx, ]
+  
+  # Perform XGBoost regression
+  results <- perform_xgb(train_data, test_data, i)
+  
+  # Store results in the list
+  xg_results_list[[paste("Fold", i)]] <- results
+}
+
+# Combine actual and predicted values from all folds
+combined_data <- bind_rows(xg_results_list)
+
+# Calculate averages of MAPE, MSPE, and AIC across all folds
+average_errors <- calculate_errors(
+  actual = combined_data$Actual,
+  predicted = combined_data$Predicted,
+  model = xg_results_list[[1]]$model  # Assuming all models are the same across folds
+)
+
+fold_boundaries <- rep(seq(1, num_folds - 1), each = training_size - 1) * fold_size
+
+# Combine plots into a single time series plot
+xg_combined_plot <- ggplot() +
+  geom_line(data = combined_data,
+            aes(x = Date.and.Time, y = Actual, color = "Actual"), size = 1, linetype = "solid") +
+  geom_line(data = combined_data,
+            aes(x = Date.and.Time, y = Predicted, color = "Predicted", linetype = "solid"), size = 1) +
+  labs(title = paste("XGBoost - Avg MAPE:", round(average_errors$MAPE, 2),
+                    ",", "Avg MSPE:", round(average_errors$MSPE, 2),
+                    ",", "Avg AIC:", round(average_errors$AIC, 2)),
+       x = "Date", y = "Price") +
+  theme_minimal() + 
+  theme(
+    axis.text = element_text(size = 14, face = 'bold'),      
+    axis.title = element_text(size = 14, face = 'bold'),     
+    plot.title = element_text(size = 15, face = 'bold'),
+    legend.text = element_text(size = 14),               
+    legend.title = element_text(size = 14) 
+  ) +
+  scale_linetype_manual(values = rep("solid", num_folds)) 
+
+# Save the combined plot as an object
+xg_combined_plot <- ggplotGrob(xg_combined_plot)
+```
+
+```{r, fig.width = 16, fig.height = 4, fig.align = 'center', fig.cap = '**Fig 4. Prediction of Bitcoin price by Random forest (left) and XGBoost regression (right) on the 5 cross folds combined.**'}
+
+# Combine the price prediction plots side by side
+grid.arrange(rf_combined_plot, xg_combined_plot, ncol = 2)
+```
+
+In the construction of the time series predictive model for Bitcoin pricing, the introduction of lagged features constitutes a critical enhancement to the analytical framework. Specifically, a lagged feature was generated by shifting the price data by one day, thus creating a new column Lag_1d in the data. This methodological step is imperative for encapsulating the temporal autocorrelation characteristic of financial time series, where previous values bear predictive power over future values. Subsequent to the introduction of 1-day lag, the data had one missing record from the end due to the lagging process. This entry was removed while fitting the models to ensure noise-free model training. 
+
+
+```{r}
+bitcoin_data <- bitcoin_data %>%
+  arrange(Date.and.Time) %>%
+  mutate(
+    Lag_1d = lag(Price, 1)
+    #Lag_7d = lag(Price, 7),         # 7 days lag
+    #Lag_15d = lag(Price, 15)        # 15 days lag
+  )
+
+# Remove rows with NA (which will be the initial rows due to lagging)
+bitcoin_data <- na.omit(bitcoin_data)
+```
+
+In the assessment of two distinct Random Forest models to predict Bitcoin price, the incorporation of lagged features has enhanced the model's predictive capability. The initial model, devoid of lagged features, presented a MAPE of 26.28, a MSPE of 12.71, and an AIC of 34607.51. These values serve as a baseline against which the performance of subsequent modeling refinements can be measured. The introduction of lagged features, signifying the inclusion of the previous day's price data in the model, resulted in a notable reduction in all three key performance metrics. The adjusted model exhibited a MAPE of 22.06, a reduction that indicates an enhanced accuracy in the percentage error rate of the predictions. The MSPE decreased to 10.8, suggesting a tighter clustering of the model's price predictions  around the actual observed values. Most telling was the reduction in AIC to 27779.16, implying a substantially improved fit of the model to the historical price data.
+
+
+```{r}
+# Function to calculate MAPE, MSPE, and AIC
+calculate_errors <- function(actual, predicted, model) {
+  # Exclude rows with missing values
+  valid_rows <- complete.cases(actual, predicted)
+  actual <- actual[valid_rows]
+  predicted <- predicted[valid_rows]
+
+  # Calculate MAPE and MSPE
+  mape <- mean(abs((actual - predicted) / actual)) * 100
+  mspe <- mean(((actual - predicted) / actual)^2) * 100
+
+  # Calculate AIC
+  residuals <- actual - predicted
+  n <- length(actual)
+  k <- length(model$coef) - 1  # Number of coefficients, excluding intercept
+  aic <- n * log(sum(residuals^2) / n) + 2 * k
+
+  errors <- data.frame(
+    MAPE = mape,
+    MSPE = mspe,
+    AIC = aic
+  )
+}
+
+# Function to perform random forest regression with lagged features and calculate errors
+perform_rf_lagged <- function(train_data, test_data) {
+  #train_feat <- c("power_max","Hash_rate", "Volume", "Lag_7d", "Lag_15d")
+  train_feat <- c("power_max","Hash_rate", "Volume", "Lag_1d")
+  
+  set.seed(186)
+  # Train random forest model
+  rf_model_lagged <- randomForest(Price ~ ., data = train_data[, c(train_feat, "Price")])
+  
+  # Predict on test data
+  test_data$predicted <- predict(rf_model_lagged, newdata = test_data[, train_feat])
+  
+  # Calculate MAPE, MSPE, and AIC
+  errors <- calculate_errors(test_data$Price, test_data$predicted, rf_model_lagged)
+  
+  return(list(
+    predictions = data.frame(
+      Date.and.Time = test_data$Date.and.Time,
+      Actual = test_data$Price,
+      Predicted = test_data$predicted
+    ),
+    errors = errors,
+    model = rf_model_lagged  # Store the model in the results
+  ))
+}
+
+# List to store actual vs predicted results and errors for each fold (Random Forest)
+rf_results_list_lagged <- list()
+
+# Manual time series cross-validation for Random Forest with Lagged Features
+for (i in 1 : num_folds) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+  
+  # Split data into training and testing sets
+  train_data <- bitcoin_data[1 : (start_idx + training_size - 1), ]
+  test_data <- bitcoin_data[(start_idx + training_size):end_idx, ]
+  
+  # Perform random forest regression with lagged features
+  results <- perform_rf_lagged(train_data, test_data)
+  
+  # Store results in the list
+  rf_results_list_lagged[[paste("Fold", i)]] <- results
+}
+
+# Calculate averages of MAPE, MSPE, and AIC across all folds for Random Forest with Lagged Features
+rf_average_errors_lagged <- calculate_errors(
+  actual = do.call(rbind, lapply(rf_results_list_lagged, function(x) x$predictions$Actual)),
+  predicted = do.call(rbind, lapply(rf_results_list_lagged, function(x) x$predictions$Predicted)),
+  model = rf_results_list_lagged[[1]]$model  # Assuming all models are the same across folds
+)
+
+# Extract predictions from the list of results
+rf_combined_data_lagged <- do.call(rbind, lapply(seq_along(rf_results_list_lagged), function(i) {
+  fold_data <- rf_results_list_lagged[[i]]$predictions
+  fold_data$Fold <- paste("Fold", i)
+  return(fold_data)
+}))
+
+fold_boundaries <- seq(training_size, length.out = num_folds, by = fold_size)
+
+# Create combined plot for Random Forest with Lagged Features
+rf_combined_plot_lagged <- ggplot(rf_combined_data_lagged) +
+  geom_line(aes(x = Date.and.Time, y = Actual, color = "Actual"), size = 1) +
+  geom_line(aes(x = Date.and.Time, y = Predicted, color = "Predicted", linetype = "solid"), size = 1) +
+  labs(title = paste("Random Forest - Avg MAPE:",
+                     round(rf_average_errors_lagged$MAPE, 2),
+                     ",", "Avg MSPE:", round(rf_average_errors_lagged$MSPE, 2),
+                     ",", "Avg AIC:", round(rf_average_errors_lagged$AIC, 2)),
+       x = "Date", y = "Price", "") +
+  theme_minimal() + 
+  theme(
+    axis.text = element_text(size = 14, face = 'bold'),      
+    axis.title = element_text(size = 14, face = 'bold'),     
+    plot.title = element_text(size = 15, face = 'bold'),
+    legend.text = element_text(size = 14),               
+    legend.title = element_text(size = 14) 
+  ) +
+  geom_vline(data = data.frame(xintercept = fold_boundaries), aes(xintercept = xintercept),
+             linetype = "dashed", color = "black", size = 0.5)
+
+# Save the combined plot as an object
+rf_combined_plot_lagged <- ggplotGrob(rf_combined_plot_lagged)
+```
+
+Building on the earlier findings with the Random Forest model, the application of XGBoost to Bitcoin price prediction further underscores the significance of lagged features in time series forecasting. The comparative analysis reveals a stark contrast in the performance of the XGBoost model before and after the inclusion of lagged features. Initially, the XGBoost model—absent of these temporal indicators—reported an MAPE of 25.99, an MSPE of 12.68, and an AIC of 34660.88, setting the stage for subsequent enhancement.
+
+The integration of lagged features into the XGBoost model marks a pivotal improvement. The MAPE sees a dramatic reduction to 13.61, indicating a notable decrease in the percentage error of predictions. The MSPE follows suit, plummeting to 6.73, which signifies a greatly improved precision in forecasting the variance of Bitcoin prices. Additionally, the model's AIC drops to 27334.89, reflecting a refined model fit that better captures the complexities of the data.
+
+This progression from the Random Forest to the XGBoost model, with the strategic incorporation of lagged features, demonstrates a consistent theme: temporal data points are invaluable for enhancing the accuracy and reliability of predictive models in financial time series. By effectively leveraging the information embedded in the preceding time steps, both models achieve a deeper level of analytical rigor, yielding forecasts that are not only more aligned with the actual market movements but also provide a stronger basis for decision-making in the volatile cryptocurrency domain.
+
+
+```{r}
+# Function to calculate MAPE, MSPE, and AIC
+calculate_errors <- function(actual, predicted, model) {
+  # Exclude rows with missing values
+  valid_rows <- complete.cases(actual, predicted)
+  actual <- actual[valid_rows]
+  predicted <- predicted[valid_rows]
+
+  # Calculate MAPE and MSPE
+  mape <- mean(abs((actual - predicted) / actual)) * 100
+  mspe <- mean(((actual - predicted) / actual)^2) * 100
+
+  # Calculate AIC
+  residuals <- actual - predicted
+  n <- length(actual)
+  k <- length(model$coef) - 1  # Number of coefficients, excluding intercept
+  aic <- n * log(sum(residuals^2) / n) + 2 * k
+
+  errors <- data.frame(
+    MAPE = mape,
+    MSPE = mspe,
+    AIC = aic
+  )
+}
+
+# Function to train XGBoost model with lagged features and make predictions
+train_and_predict_xgb_lagged <- function(train_data, test_data) {
+  #train_feat <- c("power_max","Hash_rate", "Volume", "Lag_7d", "Lag_15d")
+  train_feat <- c("power_max","Hash_rate", "Volume", "Lag_1d")
+  
+  # Specify XGBoost parameters
+  params <- list(
+    objective = "reg:squarederror"
+  )
+  
+  set.seed(247)
+  # Train the XGBoost model using lagged features
+  xgb_model_lagged <- xgboost(
+    data = as.matrix(train_data[, train_feat]),  # Exclude Date.and.Time
+    label = train_data$Price,
+    params = params,
+    nrounds = 500,
+    verbose = 0
+  )
+  
+  # Make predictions on the test set using the same lagged features
+  predictions <- predict(xgb_model_lagged, as.matrix(test_data[, train_feat]))
+  
+  # Calculate MAPE, MSPE, and AIC
+  errors <- calculate_errors(test_data$Price, predictions, xgb_model_lagged)
+  
+  # Store results and return
+  results <- data.frame(
+    Date.and.Time = test_data$Date.and.Time,
+    Actual = test_data$Price,
+    Predicted = predictions,
+    MAPE = errors$MAPE,
+    MSPE = errors$MSPE,
+    AIC = errors$AIC  # Add AIC to the results
+  )
+}
+
+# List to store actual vs predicted results and errors for each fold (XGBoost with Lagged Features)
+xgb_results_list_lagged <- list()
+
+# Manual time series cross-validation for XGBoost with Lagged Features
+for (i in 1:num_folds) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+  
+  # Split data into training and testing sets
+  train_data <- bitcoin_data[1:(start_idx + training_size - 1), ]
+  test_data <- bitcoin_data[(start_idx + training_size):end_idx, ]
+  
+  # Train XGBoost model with lagged features and make predictions
+  results <- train_and_predict_xgb_lagged(train_data, test_data)
+  
+  # Store results in the list
+  xgb_results_list_lagged[[paste("Fold", i)]] <- results
+}
+
+# Calculate averages of MAPE, MSPE, and AIC across all folds for XGBoost with Lagged Features
+xgb_average_errors_lagged <- calculate_errors(
+  actual = do.call(rbind, lapply(xgb_results_list_lagged, function(x) x$Actual)),
+  predicted = do.call(rbind, lapply(xgb_results_list_lagged, function(x) x$Predicted)),
+  model = xgb_results_list_lagged[[1]]$model  # Assuming all models are the same across folds
+)
+
+# Print average errors for XGBoost with Lagged Features
+#print(xgb_average_errors_lagged)
+
+# Prepare data for combined plot (XGBoost with Lagged Features)
+xgb_combined_data_lagged <- do.call(rbind, lapply(seq_along(xgb_results_list_lagged), function(i) {
+  fold_data <- xgb_results_list_lagged[[i]]
+  fold_data$Fold <- paste("Fold", i)
+  return(fold_data)
+}))
+
+# Create combined plot for XGBoost with Lagged Features
+xg_combined_plot_lagged <- ggplot(xgb_combined_data_lagged) +
+  geom_line(aes(x = Date.and.Time, y = Actual, color = "Actual"), size = 1) +
+  geom_line(aes(x = Date.and.Time, y = Predicted, color = "Predicted", linetype = "solid"), size = 1) +
+  labs(title = paste("XGBoost - Avg MAPE:",
+                    round(xgb_average_errors_lagged$MAPE, 2),
+                    ",", "Avg MSPE:", round(xgb_average_errors_lagged$MSPE, 2),
+                    ",", "Avg AIC:", round(xgb_average_errors_lagged$AIC, 2)),
+       x = "Date", y = "Price") +
+  theme_minimal() + 
+  theme(
+    axis.text = element_text(size = 14, face = 'bold'),      
+    axis.title = element_text(size = 14, face = 'bold'),     
+    plot.title = element_text(size = 15, face = 'bold'),
+    legend.text = element_text(size = 14),               
+    legend.title = element_text(size = 14) 
+  ) 
+
+# Save the combined plot as an object
+xg_combined_plot_lagged <- ggplotGrob(xg_combined_plot_lagged)
+```
+
+```{r, fig.width = 16, fig.height = 4, fig.align = 'center', fig.cap = '**Fig 5. Prediction of Bitcoin price by Random forest (left) and XGBoost regression (right) with 1-day lag feature on the 5 cross folds combined.**'}
+
+# Combine the price prediction plots with lag feature side by side
+grid.arrange(rf_combined_plot_lagged, xg_combined_plot_lagged, ncol = 2)
+```
+
+### B. CO~2~ emission prediction
+
+For the CO~2~ emissions in Fig. 6., the initial random forest model which did not incorporate lag features, yielded an MAPE of 12.03, an MSPE of 2.63, and an AIC of 5422.06. This model's predictions, while moderately accurate, were outperformed by the enhanced model that included lag feature as shown in Fig. 7. Incorporating lag features into the Random Forest model resulted in significant improvements, with a reduced MAPE of 7.88, MSPE of 1.6, and a notably lower AIC of 5065.54. This affirmed the importance of past values as significant predictors for future trends in carbon emissions related to Bitcoin mining. Conclusively, incorporating lag features into the Random Forest model resulted in significant improvements. This affirmed the importance of past values as significant predictors for future trends in carbon emissions related to Bitcoin mining.
+
+
+```{r}
+
+# Function to calculate MAPE, MSPE, and AIC
+calculate_errors <- function(actual, predicted, model) {
+  # Exclude rows with missing values
+  valid_rows <- complete.cases(actual, predicted)
+  actual <- actual[valid_rows]
+  predicted <- predicted[valid_rows]
+
+  # Calculate MAPE and MSPE
+  mape <- mean(abs((actual - predicted) / actual)) * 100
+  mspe <- mean(((actual - predicted) / actual)^2) * 100
+
+  # Calculate AIC
+  residuals <- actual - predicted
+  n <- length(actual)
+  k <- length(model$coef) - 1  # Number of coefficients, excluding intercept
+  aic <- n * log(sum(residuals^2) / n) + 2 * k
+
+  errors <- data.frame(
+    MAPE = mape,
+    MSPE = mspe,
+    AIC = aic
+  )
+}
+
+# Function to perform random forest regression and calculate errors
+perform_rf <- function(train_data, test_data) {
+  # Input features
+  train_feat <- c('Coal_MtCO2e')
+  
+  set.seed(186)
+  # Train random forest model
+  rf_model <- randomForest(Est_MtCO2e ~ ., data = train_data[, c(train_feat, "Est_MtCO2e")])
+  
+  # Predict on test data
+  test_data$predicted <- predict(rf_model, newdata = test_data)
+  
+  # Calculate MAPE, MSPE, and AIC
+  errors <- calculate_errors(test_data$Est_MtCO2e, test_data$predicted, rf_model)
+  
+  return(list(
+    predictions = data.frame(
+      Date.and.Time = test_data$Date.and.Time,
+      Actual = test_data$Est_MtCO2e,
+      Predicted = test_data$predicted
+    ),
+    errors = errors,
+    model = rf_model
+  ))
+}
+
+# List to store actual vs predicted results and errors for each fold
+rf_results_list <- list()
+
+# Manual time series cross-validation
+for (i in 1 : num_folds) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+  
+  # Split data into training and testing sets
+  train_data <- bitcoin_data[1:(start_idx + training_size - 1), ]
+  test_data <- bitcoin_data[(start_idx + training_size) : end_idx, ]
+  
+  # Perform random forest regression
+  results <- perform_rf(train_data, test_data)
+  
+  # Store results in the list
+  rf_results_list[[paste("Fold", i)]] <- results
+}
+
+# Calculate averages of MAPE, MSPE, and AIC across all folds
+average_errors <- calculate_errors(
+  actual = do.call(rbind, lapply(rf_results_list, function(x) x$predictions$Actual)),
+  predicted = do.call(rbind, lapply(rf_results_list, function(x) x$predictions$Predicted)),
+  model = rf_results_list[[1]]$model  # Assuming all models are the same across folds
+)
+
+# Combine plots into a single time series plot
+rf_CO2_combined_plot <- ggplot() +
+  geom_line(data = do.call(rbind, lapply(seq_along(rf_results_list), function(i) {
+    results <- rf_results_list[[i]]
+    results$predictions$Fold <- paste("Fold", i)
+    return(results$predictions)
+  })),
+  aes(x = Date.and.Time, y = Actual, color = "Actual"), size = 1, linetype = "solid") +
+  geom_line(data = do.call(rbind, lapply(seq_along(rf_results_list), function(i) {
+    results <- rf_results_list[[i]]
+    results$predictions$Fold <- paste("Fold", i)
+    return(results$predictions)
+  })),
+  aes(x = Date.and.Time, y = Predicted, color = "Predicted", linetype = "solid"), size = 1) +
+  labs(title = paste("Random forest - Avg MAPE:", round(average_errors$MAPE, 2),
+                    ",", "Avg MSPE:", round(average_errors$MSPE, 2),
+                    ",", "Avg AIC:", round(average_errors$AIC, 2)),
+       x = "Date", y = "Estimated MtCO~2~eq") +
+  theme_minimal() +
+    theme(
+      axis.text = element_text(size = 14, face = 'bold'),      
+      axis.title = element_text(size = 14, face = 'bold'),     
+      plot.title = element_text(size = 15, face = 'bold'),
+      legend.text = element_text(size = 14),               
+      legend.title = element_text(size = 14) 
+    ) +
+  scale_linetype_manual(values = rep("solid", num_folds))
+
+# Save the combined plot as an object
+rf_CO2_combined_plot <- ggplotGrob(rf_CO2_combined_plot)
+```
+
+
+```{r}
+
+# Function to calculate MAPE, MSPE, and AIC
+calculate_errors <- function(actual, predicted, model) {
+  # Exclude rows with missing values
+  valid_rows <- complete.cases(actual, predicted)
+  actual <- actual[valid_rows]
+  predicted <- predicted[valid_rows]
+
+  # Calculate MAPE and MSPE
+  mape <- mean(abs((actual - predicted) / actual)) * 100
+  mspe <- mean(((actual - predicted) / actual)^2) * 100
+
+  # Calculate AIC
+  residuals <- actual - predicted
+  n <- length(actual)
+  k <- length(model$coef) - 1  # Number of coefficients, excluding intercept
+  aic <- n * log(sum(residuals^2) / n) + 2 * k
+
+  errors <- data.frame(
+    MAPE = mape,
+    MSPE = mspe,
+    AIC = aic
+  )
+}
+
+# Function to perform XGBoost regression and calculate errors
+perform_xgb <- function(train_data, test_data, fold_number) {
+  # Specify XGBoost parameters
+  params <- list(
+    objective = "reg:squarederror"
+  )
+  
+  # Train the XGBoost model
+  train_feat <- c('Coal_MtCO2e')
+  
+  set.seed(247)
+  xgb_model <- xgboost(
+    data = as.matrix(train_data[, train_feat]),  # Exclude Date.and.Time
+    label = train_data$Est_MtCO2e,
+    params = params,
+    nrounds = 500,
+    verbose = 0  # Suppress printing of train-rmse
+  )
+  
+  # Make predictions on the test set
+  predictions <- predict(xgb_model, as.matrix(test_data[, train_feat]))
+  
+  # Calculate MAPE, MSPE, and AIC
+  errors <- calculate_errors(test_data$Est_MtCO2e, predictions, xgb_model)
+  
+  # Store results without printing
+  results <- data.frame(
+    Date.and.Time = test_data$Date.and.Time,
+    Actual = test_data$Est_MtCO2e,
+    Predicted = predictions,
+    MAPE = errors$MAPE,
+    MSPE = errors$MSPE,
+    AIC = errors$AIC,  # Add AIC to the results
+    Fold = paste("Fold", fold_number)
+  )
+}
+
+# List to store actual vs predicted results and errors for each fold
+xg_results_list <- list()
+
+# Manual time series cross-validation
+for (i in 1 : num_folds) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+  
+  # Split data into training and testing sets
+  train_data <- bitcoin_data[1 : (start_idx + training_size - 1), ]
+  test_data <- bitcoin_data[(start_idx + training_size) : end_idx, ]
+  
+  # Perform XGBoost regression
+  results <- perform_xgb(train_data, test_data, i)
+  
+  # Store results in the list
+  xg_results_list[[paste("Fold", i)]] <- results
+}
+
+# Combine actual and predicted values from all folds
+combined_data <- bind_rows(xg_results_list)
+
+# Calculate averages of MAPE, MSPE, and AIC across all folds
+average_errors <- calculate_errors(
+  actual = combined_data$Actual,
+  predicted = combined_data$Predicted,
+  model = xg_results_list[[1]]$model  # Assuming all models are the same across folds
+)
+
+fold_boundaries <- rep(seq(1, num_folds - 1), each = training_size - 1) * fold_size
+
+# Combine plots into a single time series plot
+xg_CO2_combined_plot <- ggplot() +
+  geom_line(data = combined_data,
+            aes(x = Date.and.Time, y = Actual, color = "Actual"), size = 1, linetype = "solid") +
+  geom_line(data = combined_data,
+            aes(x = Date.and.Time, y = Predicted, color = "Predicted", linetype = "solid"), size = 1) +
+  scale_y_continuous(limits = c(15, 70)) +
+  labs(title = paste("XGBoost - Avg MAPE:", round(average_errors$MAPE, 2),
+                    ",", "Avg MSPE:", round(average_errors$MSPE, 2),
+                    ",", "Avg AIC:", round(average_errors$AIC, 2)),
+       x = "Date", y = "Estimated MtCO~2~eq") +
+  theme_minimal() + 
+  theme(
+    axis.text = element_text(size = 14, face = 'bold'),      
+    axis.title = element_text(size = 14, face = 'bold'),     
+    plot.title = element_text(size = 15, face = 'bold'),
+    legend.text = element_text(size = 14),               
+    legend.title = element_text(size = 14) 
+  ) +
+  scale_linetype_manual(values = rep("solid", num_folds)) 
+
+# Save the combined plot as an object
+xg_CO2_combined_plot <- ggplotGrob(xg_CO2_combined_plot)
+```
+
+
+```{r, fig.width = 16, fig.height = 4, fig.align = 'center', fig.cap = '**Fig 6. Prediction of CO~2~ emission by Random forest (left) and XGBoost regression (right) on the 5 cross folds combined.**'}
+
+# Combine the price prediction plots side by side
+grid.arrange(rf_CO2_combined_plot, xg_CO2_combined_plot, ncol = 2)
+```
+
+The XGBoost model also showed improvement in the performance metrics with the inclusion of lag feature. The MAPE decreased from 11.18 to 9, the MSPE marginally decreased from 2.36 to 2.31, and the AIC decreased from 6588.8 to 5487.65. When comparing the two models with the inclusion of lag features, the random forest model demonstrated superior performance over the XGBoost model, particularly in terms of MAPE and AIC. The improved accuracy and parsimony suggest that the random forest model, with its lagged data inputs, is more adept at capturing the structure of the carbon emissions data, leading to more precise forecasts. However, it is important to note that performing more hyperparameter tuning could yield an XGBoost model which is better than random forest. 
+
+In conclusion, for the objective of estimating carbon emissions from Bitcoin mining, both models successfully predict the carbon dioxide emissions by Bitcoin mining activity although with the chosen parameters, the random forest model slightly outperforms the XGBoost model.
+
+```{r}
+bitcoin_data <- bitcoin_data %>%
+  arrange(Date.and.Time) %>%
+  mutate(
+    Lag_1d = lag(Est_MtCO2e, 1)           # 1 day lag
+    #Lag_7d = lag(Est_MtCO2e, 7),         # 7 days lag
+    #Lag_15d = lag(Est_MtCO2e, 15)        # 15 days lag
+  )
+
+# Remove rows with NA (which will be the initial rows due to lagging)
+bitcoin_data <- na.omit(bitcoin_data)
+```
+
+```{r}
+# Function to calculate MAPE, MSPE, and AIC
+calculate_errors <- function(actual, predicted, model) {
+  # Exclude rows with missing values
+  valid_rows <- complete.cases(actual, predicted)
+  actual <- actual[valid_rows]
+  predicted <- predicted[valid_rows]
+
+  # Calculate MAPE and MSPE
+  mape <- mean(abs((actual - predicted) / actual)) * 100
+  mspe <- mean(((actual - predicted) / actual)^2) * 100
+
+  # Calculate AIC
+  residuals <- actual - predicted
+  n <- length(actual)
+  k <- length(model$coef) - 1  # Number of coefficients, excluding intercept
+  aic <- n * log(sum(residuals^2) / n) + 2 * k
+
+  errors <- data.frame(
+    MAPE = mape,
+    MSPE = mspe,
+    AIC = aic
+  )
+}
+
+# Function to perform random forest regression with lagged features and calculate errors
+perform_rf_lagged <- function(train_data, test_data) {
+  #train_feat <- c("Coal_MtCO2e", "Lag_7d", "Lag_15d")
+  train_feat <- c("Coal_MtCO2e", "Lag_1d")
+  
+  set.seed(186)
+  # Train random forest model
+  rf_model_lagged <- randomForest(Est_MtCO2e ~ ., data = train_data[, c(train_feat, "Est_MtCO2e")])
+  
+  # Predict on test data
+  test_data$predicted <- predict(rf_model_lagged, newdata = test_data[, train_feat])
+  
+  # Calculate MAPE, MSPE, and AIC
+  errors <- calculate_errors(test_data$Est_MtCO2e, test_data$predicted, rf_model_lagged)
+  
+  return(list(
+    predictions = data.frame(
+      Date.and.Time = test_data$Date.and.Time,
+      Actual = test_data$Est_MtCO2e,
+      Predicted = test_data$predicted
+    ),
+    errors = errors,
+    model = rf_model_lagged  # Store the model in the results
+  ))
+}
+
+# List to store actual vs predicted results and errors for each fold (Random Forest)
+rf_results_list_lagged <- list()
+
+# Manual time series cross-validation for Random Forest with Lagged Features
+for (i in 1 : num_folds) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+  
+  # Split data into training and testing sets
+  train_data <- bitcoin_data[1 : (start_idx + training_size - 1), ]
+  test_data <- bitcoin_data[(start_idx + training_size):end_idx, ]
+  
+  # Perform random forest regression with lagged features
+  results <- perform_rf_lagged(train_data, test_data)
+  
+  # Store results in the list
+  rf_results_list_lagged[[paste("Fold", i)]] <- results
+}
+
+# Calculate averages of MAPE, MSPE, and AIC across all folds for Random Forest with Lagged Features
+rf_average_errors_lagged <- calculate_errors(
+  actual = do.call(rbind, lapply(rf_results_list_lagged, function(x) x$predictions$Actual)),
+  predicted = do.call(rbind, lapply(rf_results_list_lagged, function(x) x$predictions$Predicted)),
+  model = rf_results_list_lagged[[1]]$model  # Assuming all models are the same across folds
+)
+
+# Extract predictions from the list of results
+rf_combined_data_lagged <- do.call(rbind, lapply(seq_along(rf_results_list_lagged), function(i) {
+  fold_data <- rf_results_list_lagged[[i]]$predictions
+  fold_data$Fold <- paste("Fold", i)
+  return(fold_data)
+}))
+
+fold_boundaries <- seq(training_size, length.out = num_folds, by = fold_size)
+
+# Create combined plot for Random Forest with Lagged Features
+rf_CO2_combined_plot_lagged <- ggplot(rf_combined_data_lagged) +
+  geom_line(aes(x = Date.and.Time, y = Actual, color = "Actual"), size = 1) +
+  geom_line(aes(x = Date.and.Time, y = Predicted, color = "Predicted", linetype = "solid"), size = 1) +
+  labs(title = paste("Random Forest - Avg MAPE:",
+                     round(rf_average_errors_lagged$MAPE, 2),
+                     ",", "Avg MSPE:", round(rf_average_errors_lagged$MSPE, 2),
+                     ",", "Avg AIC:", round(rf_average_errors_lagged$AIC, 2)),
+       x = "Date", y = "Estimated MtCO~2~e", "") +
+  theme_minimal() + 
+  theme(
+    axis.text = element_text(size = 14, face = 'bold'),      
+    axis.title = element_text(size = 14, face = 'bold'),     
+    plot.title = element_text(size = 15, face = 'bold'),
+    legend.text = element_text(size = 14),               
+    legend.title = element_text(size = 14) 
+  ) +
+  geom_vline(data = data.frame(xintercept = fold_boundaries), aes(xintercept = xintercept),
+             linetype = "dashed", color = "black", size = 0.5)
+
+# Save the combined plot as an object
+rf_CO2_combined_plot_lagged <- ggplotGrob(rf_CO2_combined_plot_lagged)
+```
+
+
+```{r}
+# Function to calculate MAPE, MSPE, and AIC
+calculate_errors <- function(actual, predicted, model) {
+  # Exclude rows with missing values
+  valid_rows <- complete.cases(actual, predicted)
+  actual <- actual[valid_rows]
+  predicted <- predicted[valid_rows]
+
+  # Calculate MAPE and MSPE
+  mape <- mean(abs((actual - predicted) / actual)) * 100
+  mspe <- mean(((actual - predicted) / actual)^2) * 100
+
+  # Calculate AIC
+  residuals <- actual - predicted
+  n <- length(actual)
+  k <- length(model$coef) - 1  # Number of coefficients, excluding intercept
+  aic <- n * log(sum(residuals^2) / n) + 2 * k
+
+  errors <- data.frame(
+    MAPE = mape,
+    MSPE = mspe,
+    AIC = aic
+  )
+}
+
+# Function to train XGBoost model with lagged features and make predictions
+train_and_predict_xgb_lagged <- function(train_data, test_data) {
+  #train_feat <- c('Coal_MtCO2e', "Lag_7d", "Lag_15d")
+  train_feat <- c("Coal_MtCO2e", "Lag_1d")
+  
+  # Specify XGBoost parameters
+  params <- list(
+    objective = "reg:squarederror"
+  )
+  
+  set.seed(247)
+  # Train the XGBoost model using lagged features
+  xgb_model_lagged <- xgboost(
+    data = as.matrix(train_data[, train_feat]),  # Exclude Date.and.Time
+    label = train_data$Est_MtCO2e,
+    params = params,
+    nrounds = 500,
+    verbose = 0
+  )
+  
+  # Make predictions on the test set using the same lagged features
+  predictions <- predict(xgb_model_lagged, as.matrix(test_data[, train_feat]))
+  
+  # Calculate MAPE, MSPE, and AIC
+  errors <- calculate_errors(test_data$Est_MtCO2e, predictions, xgb_model_lagged)
+  
+  # Store results and return
+  results <- data.frame(
+    Date.and.Time = test_data$Date.and.Time,
+    Actual = test_data$Est_MtCO2e,
+    Predicted = predictions,
+    MAPE = errors$MAPE,
+    MSPE = errors$MSPE,
+    AIC = errors$AIC  # Add AIC to the results
+  )
+}
+
+# List to store actual vs predicted results and errors for each fold (XGBoost with Lagged Features)
+xgb_results_list_lagged <- list()
+
+# Manual time series cross-validation for XGBoost with Lagged Features
+for (i in 1:num_folds) {
+  start_idx <- (i - 1) * fold_size + 1
+  end_idx <- start_idx + fold_size + training_size - 1
+  
+  # Split data into training and testing sets
+  train_data <- bitcoin_data[1:(start_idx + training_size - 1), ]
+  test_data <- bitcoin_data[(start_idx + training_size):end_idx, ]
+  
+  # Train XGBoost model with lagged features and make predictions
+  results <- train_and_predict_xgb_lagged(train_data, test_data)
+  
+  # Store results in the list
+  xgb_results_list_lagged[[paste("Fold", i)]] <- results
+}
+
+# Calculate averages of MAPE, MSPE, and AIC across all folds for XGBoost with Lagged Features
+xgb_average_errors_lagged <- calculate_errors(
+  actual = do.call(rbind, lapply(xgb_results_list_lagged, function(x) x$Actual)),
+  predicted = do.call(rbind, lapply(xgb_results_list_lagged, function(x) x$Predicted)),
+  model = xgb_results_list_lagged[[1]]$model  # Assuming all models are the same across folds
+)
+
+# Print average errors for XGBoost with Lagged Features
+print(xgb_average_errors_lagged)
+
+# Prepare data for combined plot (XGBoost with Lagged Features)
+xgb_combined_data_lagged <- do.call(rbind, lapply(seq_along(xgb_results_list_lagged), function(i) {
+  fold_data <- xgb_results_list_lagged[[i]]
+  fold_data$Fold <- paste("Fold", i)
+  return(fold_data)
+}))
+
+# Create combined plot for XGBoost with Lagged Features
+xg_CO2_combined_plot_lagged <- ggplot(xgb_combined_data_lagged) +
+  geom_line(aes(x = Date.and.Time, y = Actual, color = "Actual"), size = 1) +
+  geom_line(aes(x = Date.and.Time, y = Predicted, color = "Predicted", linetype = "solid"), size = 1) +
+  labs(title = paste("XGBoost - Avg MAPE:",
+                    round(xgb_average_errors_lagged$MAPE, 2),
+                    ",", "Avg MSPE:", round(xgb_average_errors_lagged$MSPE, 2),
+                    ",", "Avg AIC:", round(xgb_average_errors_lagged$AIC, 2)),
+       x = "Date", y = "Estimated MtCO~2~eq") +
+  theme_minimal() + 
+  theme(
+    axis.text = element_text(size = 14, face = 'bold'),      
+    axis.title = element_text(size = 14, face = 'bold'),     
+    plot.title = element_text(size = 15, face = 'bold'),
+    legend.text = element_text(size = 14),               
+    legend.title = element_text(size = 14) 
+  ) +
+  scale_y_continuous(limit = c(15, 70))
+
+# Save the combined plot as an object
+xg_CO2_combined_plot_lagged <- ggplotGrob(xg_CO2_combined_plot_lagged)
+```
+
+
+```{r, fig.width = 16, fig.height = 4, fig.align = 'center', fig.cap = '**Fig 7. Prediction of CO~2~ emission by Random forest (left) and XGBoost regression (right) with 1-day lag feature on the 5 cross folds combined.**'}
+
+# Combine the price prediction plots side by side
+grid.arrange(rf_CO2_combined_plot_lagged, xg_CO2_combined_plot_lagged, ncol = 2)
+```
+
+## Conclusions
+
+Over the past ten years, the value of Bitcoin has generally been on the rise. Predictive models based on machine learning have proven to be quite useful in estimating its future value. Likewise, the projected levels of carbon dioxide emissions have displayed a trend that appears to align with that of Bitcoin's value, with a Pearson correlation coefficient of approximately 0.84, indicating a strong association between the two. This indicates that with the application of advanced modeling techniques, it might be possible to precisely predict key factors related to the process of Bitcoin mining.
+
+For Bitcoin price prediction, the XG Boost model with lagged features outperforms the Random Forest model, achieving a superior predictive accuracy and model fit. For estimating CO~2~ emissions from Bitcoin mining, the Random Forest model with lagged features emerges as more effective, leveraging historical data for more accurate and reliable predictions.
+
+In summary, lagged features play a pivotal role in improving the predictive performance of machine learning models in time series analysis of Bitcoin data. The Random Forest model, when equipped with these lagged features, provides the most accurate predictions for CO~2~ emissions from Bitcoin mining. However, the XG Boost model shows the best results for Bitcoin price prediction when these temporal dynamics are considered. These findings underscore the importance of considering historical data points and the intrinsic temporal dependencies in financial time series forecasting.
+
+## References
+
+1) Stoll, Christian., Klaassen, Lena., & Gallersdorfer, Ulrich. (2018, Dec). The Carbon Footprint of Bitcoin. MIT CEEPR Working Paper Series by Massachusetts Institute of Technology. https://ceepr.mit.edu/wp-content/uploads/2021/09/2018-018.pdf
+
+2) Krause, M. J., & Tolaymat, T. (2018). Quantification of energy and carbon costs for mining cryptocurrencies. Nature Sustainability, 1(11), 711–718. https://doi-org.proxygw.wrlc.org/10.1038/s41893-018-0152-7
+
+3) Cambridge Bitcoin Electricity Consumption Index 2023. https://ccaf.io/cbnsi/cbeci
+
+4) Bitcoin Network Hash Rate, NASDAQ 2023. https://data.nasdaq.com/data/BCHAIN/HRATE-bitcoin-hash-rate
+
+5) Bitcoin’s price and volume data from data.bitcoinity.org,
+https://data.bitcoinity.org/markets/price_volume/all/USD?t=lb&vu=curr. 
+
+6) Calvo-Pardo, H. F., Mancini, T., & Olmo, J. (2022). Machine Learning the Carbon Footprint of Bitcoin Mining. Journal of Risk and Financial Management, 15(2), 71. https://doi.org/10.3390/jrfm15020071
+
+
+
+
