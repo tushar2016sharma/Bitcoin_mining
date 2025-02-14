@@ -1,7 +1,7 @@
-### Environmental Impacts of Bitcoin Mining
+## Environmental Impacts of Bitcoin Mining
 
 
-This project was accomplished in two phases as described below:
+#### This project was accomplished in two phases as described below:
 
 The first project comprehensively analyzed the environmental consequences 
 of Bitcoin mining through data and statistical analysis. 
