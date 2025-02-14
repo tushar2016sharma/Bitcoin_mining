@@ -15,4 +15,4 @@ specifically addressing concerns related to greenhouse gas emissions and environ
 The second project analyzed the environmental consequences of Bitcoin mining through traditional Machine Learning approaches. 
 The focus in this phase was on predictive modeling, essentially the following two objectives: 
 1) The prediction of Bitcoin price based on the historical market conditions and other important predictors.
-2) Prediction of CO2~ emission which will provide insights about the carbon footprint of Bitcoin mining.
+2) Prediction of Carbon Dioxide emission which will provide insights about the carbon footprint of Bitcoin mining.
